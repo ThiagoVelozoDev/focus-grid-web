@@ -5,13 +5,16 @@ Sistema de gerenciamento de tarefas pessoais com foco em produtividade, execucao
 ## Stack
 
 - React + Vite + TypeScript
-- Zustand para estado global
+- Firebase Auth (Google)
+- Firestore para persistencia em nuvem
 - TailwindCSS para interface
-- Persistencia automatica com LocalStorage
+- Migracao automatica do historico salvo em LocalStorage
 
 ## Funcionalidades
 
 - CRUD completo de tarefas
+- Login com Google
+- Sincronizacao por usuario em tempo real com Firestore
 - Estrutura SMART por tarefa:
   - specific
   - measurable
@@ -25,6 +28,7 @@ Sistema de gerenciamento de tarefas pessoais com foco em produtividade, execucao
 - Contador de tarefas concluidas no dia
 - Drag and drop entre status
 - Feedback visual ao concluir tarefa
+- Layout com header e sidebar
 
 ## Estrutura de codigo
 
@@ -45,6 +49,26 @@ Sistema de gerenciamento de tarefas pessoais com foco em produtividade, execucao
 ```bash
 npm install
 npm run dev
+```
+
+## Configuracao Firebase
+
+1. Crie um projeto no Firebase.
+2. Ative Authentication com provedor Google.
+3. Ative o Firestore Database.
+4. Copie `.env.example` para `.env` e preencha as variaveis `VITE_FIREBASE_*`.
+
+Exemplo de regras iniciais do Firestore (ajuste para producao):
+
+```txt
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId}/tasks/{taskId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
 ```
 
 Build de producao:

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { TaskForm } from '../components/TaskForm'
-import { useTasks } from '../hooks/useTasks'
+import { useTasks } from '../hooks/useTasks.ts'
 import type { TaskInput, Task, TaskFilter, TaskStatus } from '../types/task'
 
 type Segment = 'dueToday' | 'dueTomorrow' | 'onTime' | 'late' | 'completed'
@@ -43,6 +43,14 @@ const statusLabel = {
   todo: 'A fazer',
   doing: 'Em andamento',
   done: 'Concluida',
+}
+
+const getStatusLabel = (status: unknown) => {
+  if (status === 'pending' || status === 'todo' || status === 'doing' || status === 'done') {
+    return statusLabel[status]
+  }
+
+  return '-'
 }
 
 const statusBadge: Record<TaskStatus, string> = {
@@ -160,7 +168,7 @@ const priorityOrder = {
 }
 
 export function Dashboard() {
-  const { tasks, addTask, updateTask, deleteTask, toggleComplete, addAcompanhamento, updateAcompanhamento } = useTasks()
+  const { tasks, loading, addTask, updateTask, deleteTask, toggleComplete, addAcompanhamento, updateAcompanhamento } = useTasks()
   const [statusFilter, setStatusFilter] = useState<TaskFilter>('all')
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all')
   const [searchTerm, setSearchTerm] = useState('')
@@ -356,19 +364,19 @@ export function Dashboard() {
 
   const handleSubmitTask = (input: TaskInput) => {
     if (editingTask) {
-      updateTask(editingTask.id, input)
+      void updateTask(editingTask.id, input)
       setEditingTask(null)
       setIsFormOpen(false)
       return
     }
 
-    addTask(input)
+    void addTask(input)
     setIsFormOpen(false)
   }
 
   const handleToggleComplete = (id: string) => {
     const activeTask = tasks.find((task) => task.id === id)
-    toggleComplete(id)
+    void toggleComplete(id)
 
     if (activeTask && activeTask.status !== 'done') {
       setFlashMessage('Tarefa concluida. Excelente ritmo!')
@@ -381,7 +389,7 @@ export function Dashboard() {
       setEditingTask(null)
     }
 
-    deleteTask(id)
+    void deleteTask(id)
   }
 
   const openNewTaskDialog = () => {
@@ -420,7 +428,7 @@ export function Dashboard() {
       return
     }
 
-    addAcompanhamento(detailTaskId, texto)
+    void addAcompanhamento(detailTaskId, texto)
     setNovoAcompanhamento('')
   }
 
@@ -444,7 +452,7 @@ export function Dashboard() {
       return
     }
 
-    updateAcompanhamento(detailTaskId, editingAcompanhamentoId, texto)
+    void updateAcompanhamento(detailTaskId, editingAcompanhamentoId, texto)
     cancelEditAcompanhamento()
   }
 
@@ -509,7 +517,13 @@ export function Dashboard() {
   )
 
   return (
-    <main className="mx-auto grid min-h-screen w-[96%] md:w-[90%] xl:w-[80%] max-w-none gap-8 py-8 md:gap-10">
+    <main className="mx-auto grid w-[96%] py-8 md:w-[92%] md:gap-10 xl:w-[90%]">
+      {loading && (
+        <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-700">
+          Sincronizando tarefas com Firebase...
+        </div>
+      )}
+
       <section className="grid gap-4 rounded-3xl border border-white/40 bg-white/70 p-5 shadow-lg backdrop-blur">
         <div className="flex items-center justify-between">
           <h2 className="font-heading text-lg text-slate-900">Painel do dashboard</h2>
@@ -527,7 +541,7 @@ export function Dashboard() {
         </div>
 
         {showDashboard ? (
-          <header className="relative overflow-hidden rounded-3xl border border-white/20 bg-gradient-to-br from-blue-950 via-slate-900 to-blue-800 p-6 text-white shadow-xl">
+          <header className="relative overflow-hidden rounded-3xl border border-white/20 bg-linear-to-br from-blue-950 via-slate-900 to-blue-800 p-6 text-white shadow-xl">
             <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-blue-200/20 blur-2xl" />
             <div className="pointer-events-none absolute -bottom-20 -left-16 h-56 w-56 rounded-full bg-sky-300/20 blur-2xl" />
 
@@ -627,7 +641,7 @@ export function Dashboard() {
               <span><strong>Onde:</strong> {detailTask.onde}</span>
               <span><strong>Inicio:</strong> {formatDate(detailTask.dataInicio)}</span>
               <span className={getPrazoClass(detailTask.quando)}><strong>Quando:</strong> {formatDate(detailTask.quando)}</span>
-              <span><strong>Status:</strong> {statusLabel[detailTask.status]}</span>
+              <span><strong>Status:</strong> {getStatusLabel(detailTask.status)}</span>
             </div>
 
             <p className="whitespace-pre-wrap rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-relaxed text-slate-700">

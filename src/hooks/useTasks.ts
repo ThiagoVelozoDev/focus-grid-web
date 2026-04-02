@@ -1,17 +1,20 @@
-import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDocs,
+  onSnapshot,
+  orderBy,
+  query,
+  setDoc,
+  updateDoc,
+  writeBatch,
+} from 'firebase/firestore'
+import { useAuth } from './useAuth'
+import { db } from '../services/firebase'
 import { taskStorage } from '../services/localStorage'
 import type { TaskAcompanhamento, TaskInput, Task } from '../types/task'
-
-type TaskStore = {
-  tasks: Task[]
-  addTask: (input: TaskInput) => Task
-  updateTask: (id: string, input: TaskInput) => void
-  deleteTask: (id: string) => void
-  toggleComplete: (id: string) => void
-  addAcompanhamento: (id: string, texto: string) => void
-  updateAcompanhamento: (taskId: string, acompanhamentoId: string, texto: string) => void
-}
 
 const nowIso = () => new Date().toISOString()
 
@@ -66,128 +69,241 @@ const normalizeTask = (rawValue: unknown): Task => {
   }
 }
 
-export const useTasks = create<TaskStore>()(
-  persist(
-    (set) => ({
-      tasks: [],
-      addTask: (input) => {
-        const newTask = buildTask(input)
-        set((state) => ({ tasks: [newTask, ...state.tasks] }))
-        return newTask
-      },
-      updateTask: (id, input) => {
-        set((state) => ({
-          tasks: state.tasks.map((task) => {
-            if (task.id !== id) {
-              return task
-            }
+const getLegacyTasks = (): Task[] => {
+  const raw = window.localStorage.getItem(taskStorage.key)
+  if (!raw) {
+    return []
+  }
 
-            const updatedAt = nowIso()
-            const completedAt =
-              input.status === 'done'
-                ? task.completedAt ?? updatedAt
-                : null
+  try {
+    const parsed = JSON.parse(raw) as { state?: { tasks?: unknown[] }; tasks?: unknown[] }
+    const currentTasks = Array.isArray(parsed.state?.tasks)
+      ? parsed.state.tasks
+      : Array.isArray(parsed.tasks)
+        ? parsed.tasks
+        : []
 
-            return {
-              ...task,
-              ...input,
-              completedAt,
-              updatedAt,
-            }
-          }),
-        }))
-      },
-      deleteTask: (id) => {
-        set((state) => ({ tasks: state.tasks.filter((task) => task.id !== id) }))
-      },
-      toggleComplete: (id) => {
-        set((state) => ({
-          tasks: state.tasks.map((task) => {
-            if (task.id !== id) {
-              return task
-            }
+    return currentTasks.map(normalizeTask)
+  } catch {
+    return []
+  }
+}
 
-            const updatedAt = nowIso()
-            const isDone = task.status === 'done'
+type TaskActions = {
+  tasks: Task[]
+  loading: boolean
+  addTask: (input: TaskInput) => Promise<void>
+  updateTask: (id: string, input: TaskInput) => Promise<void>
+  deleteTask: (id: string) => Promise<void>
+  toggleComplete: (id: string) => Promise<void>
+  addAcompanhamento: (id: string, texto: string) => Promise<void>
+  updateAcompanhamento: (taskId: string, acompanhamentoId: string, texto: string) => Promise<void>
+}
 
-            return {
-              ...task,
-              status: isDone ? 'pending' : 'done',
-              completedAt: isDone ? null : updatedAt,
-              updatedAt,
-            }
-          }),
-        }))
-      },
-      addAcompanhamento: (id, texto) => {
-        const cleanText = texto.trim()
-        if (!cleanText) {
-          return
-        }
+export function useTasks(): TaskActions {
+  const { user } = useAuth()
+  const [tasks, setTasks] = useState<Task[]>([])
+  const [loading, setLoading] = useState(true)
 
-        set((state) => ({
-          tasks: state.tasks.map((task) => {
-            if (task.id !== id) {
-              return task
-            }
+  const tasksCollection = useMemo(() => {
+    if (!user) {
+      return null
+    }
 
-            return {
-              ...task,
-              updatedAt: nowIso(),
-              acompanhamentos: [
-                ...task.acompanhamentos,
-                {
-                  id: crypto.randomUUID(),
-                  texto: cleanText,
-                  createdAt: nowIso(),
-                },
-              ],
-            }
-          }),
-        }))
-      },
-      updateAcompanhamento: (taskId, acompanhamentoId, texto) => {
-        const cleanText = texto.trim()
-        if (!cleanText) {
-          return
-        }
+    return collection(db, 'users', user.uid, 'tasks')
+  }, [user])
 
-        set((state) => ({
-          tasks: state.tasks.map((task) => {
-            if (task.id !== taskId) {
-              return task
-            }
+  useEffect(() => {
+    if (!tasksCollection) {
+      setTasks([])
+      setLoading(false)
+      return
+    }
 
-            return {
-              ...task,
-              updatedAt: nowIso(),
-              acompanhamentos: task.acompanhamentos.map((item) => {
-                if (item.id !== acompanhamentoId) {
-                  return item
-                }
+    setLoading(true)
 
-                return {
-                  ...item,
-                  texto: cleanText,
-                }
-              }),
-            }
-          }),
-        }))
-      },
-    }),
-    {
-      name: taskStorage.key,
-      version: 4,
-      migrate: (persistedState: unknown) => {
-        const state = asRecord(persistedState)
-        const currentTasks = Array.isArray(state.tasks) ? state.tasks : []
-        return {
-          ...state,
-          tasks: currentTasks.map(normalizeTask),
-        }
-      },
-      partialize: (state) => ({ tasks: state.tasks }),
+    const tasksQuery = query(tasksCollection, orderBy('updatedAt', 'desc'))
+
+    const unsubscribe = onSnapshot(tasksQuery, (snapshot) => {
+      const nextTasks = snapshot.docs.map((entry) => normalizeTask(entry.data()))
+      setTasks(nextTasks)
+      setLoading(false)
+    })
+
+    return unsubscribe
+  }, [tasksCollection])
+
+  useEffect(() => {
+    if (!tasksCollection || !user) {
+      return
+    }
+
+    const migrationKey = `${taskStorage.migrationPrefix}-${user.uid}`
+
+    if (window.localStorage.getItem(migrationKey) === 'done') {
+      return
+    }
+
+    const migrateLegacyTasks = async () => {
+      const localTasks = getLegacyTasks()
+      if (localTasks.length === 0) {
+        window.localStorage.setItem(migrationKey, 'done')
+        return
+      }
+
+      const currentCloud = await getDocs(tasksCollection)
+
+      if (!currentCloud.empty) {
+        window.localStorage.setItem(migrationKey, 'done')
+        return
+      }
+
+      const batch = writeBatch(db)
+
+      for (const task of localTasks) {
+        const ref = doc(tasksCollection, task.id)
+        batch.set(ref, task)
+      }
+
+      await batch.commit()
+      window.localStorage.setItem(migrationKey, 'done')
+    }
+
+    void migrateLegacyTasks()
+  }, [tasksCollection, user])
+
+  const addTask = useCallback(
+    async (input: TaskInput) => {
+      if (!tasksCollection) {
+        return
+      }
+
+      const task = buildTask(input)
+      await setDoc(doc(tasksCollection, task.id), task)
     },
-  ),
-)
+    [tasksCollection],
+  )
+
+  const updateTaskData = useCallback(
+    async (id: string, updater: (task: Task) => Task) => {
+      if (!tasksCollection) {
+        return
+      }
+
+      const currentTask = tasks.find((task) => task.id === id)
+      if (!currentTask) {
+        return
+      }
+
+      const nextTask = updater(currentTask)
+      await updateDoc(doc(tasksCollection, id), {
+        ...nextTask,
+      })
+    },
+    [tasks, tasksCollection],
+  )
+
+  const updateTask = useCallback(
+    async (id: string, input: TaskInput) => {
+      await updateTaskData(id, (task) => {
+        const updatedAt = nowIso()
+        const completedAt = input.status === 'done' ? task.completedAt ?? updatedAt : null
+
+        return {
+          ...task,
+          ...input,
+          completedAt,
+          updatedAt,
+        }
+      })
+    },
+    [updateTaskData],
+  )
+
+  const deleteTaskById = useCallback(
+    async (id: string) => {
+      if (!tasksCollection) {
+        return
+      }
+
+      await deleteDoc(doc(tasksCollection, id))
+    },
+    [tasksCollection],
+  )
+
+  const toggleComplete = useCallback(
+    async (id: string) => {
+      await updateTaskData(id, (task) => {
+        const updatedAt = nowIso()
+        const isDone = task.status === 'done'
+
+        return {
+          ...task,
+          status: isDone ? 'pending' : 'done',
+          completedAt: isDone ? null : updatedAt,
+          updatedAt,
+        }
+      })
+    },
+    [updateTaskData],
+  )
+
+  const addAcompanhamento = useCallback(
+    async (id: string, texto: string) => {
+      const cleanText = texto.trim()
+      if (!cleanText) {
+        return
+      }
+
+      await updateTaskData(id, (task) => ({
+        ...task,
+        updatedAt: nowIso(),
+        acompanhamentos: [
+          ...task.acompanhamentos,
+          {
+            id: crypto.randomUUID(),
+            texto: cleanText,
+            createdAt: nowIso(),
+          },
+        ],
+      }))
+    },
+    [updateTaskData],
+  )
+
+  const updateAcompanhamento = useCallback(
+    async (taskId: string, acompanhamentoId: string, texto: string) => {
+      const cleanText = texto.trim()
+      if (!cleanText) {
+        return
+      }
+
+      await updateTaskData(taskId, (task) => ({
+        ...task,
+        updatedAt: nowIso(),
+        acompanhamentos: task.acompanhamentos.map((item) => {
+          if (item.id !== acompanhamentoId) {
+            return item
+          }
+
+          return {
+            ...item,
+            texto: cleanText,
+          }
+        }),
+      }))
+    },
+    [updateTaskData],
+  )
+
+  return {
+    tasks,
+    loading,
+    addTask,
+    updateTask,
+    deleteTask: deleteTaskById,
+    toggleComplete,
+    addAcompanhamento,
+    updateAcompanhamento,
+  }
+}
