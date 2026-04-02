@@ -809,7 +809,7 @@ export function Dashboard({ responsaveis, locais, theme }: DashboardProps) {
                 </div>
               </div>
 
-              <ol className="grid gap-2">
+              <ol className="grid max-h-72 gap-2 overflow-y-auto pr-1">
                 {detailTask.acompanhamentos.length === 0 && (
                   <li className={`rounded-xl border border-dashed px-3 py-2 text-sm ${isDark ? 'border-[#353535] text-slate-400' : 'border-slate-300 text-slate-500'}`}>
                     Sem acompanhamentos ainda.
