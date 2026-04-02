@@ -4,11 +4,21 @@ type AppHeaderProps = {
   theme: ThemeMode
   userEmail: string | null | undefined
   onOpenSidebar: () => void
+  isSidebarCollapsed: boolean
+  onToggleSidebarCollapse: () => void
   onToggleTheme: () => void
   onSignOut: () => void
 }
 
-export function AppHeader({ theme, userEmail, onOpenSidebar, onToggleTheme, onSignOut }: AppHeaderProps) {
+export function AppHeader({
+  theme,
+  userEmail,
+  onOpenSidebar,
+  isSidebarCollapsed,
+  onToggleSidebarCollapse,
+  onToggleTheme,
+  onSignOut,
+}: AppHeaderProps) {
   const isDark = theme === 'dark'
 
   return (
@@ -23,6 +33,23 @@ export function AppHeader({ theme, userEmail, onOpenSidebar, onToggleTheme, onSi
           <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M3 6h18M3 12h18M3 18h18" />
           </svg>
+        </button>
+
+        <button
+          type="button"
+          aria-label={isSidebarCollapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}
+          onClick={onToggleSidebarCollapse}
+          className={`hidden h-10 w-10 items-center justify-center rounded-xl border lg:inline-flex ${isDark ? 'border-[#353535] bg-[#212121] text-slate-100' : 'border-slate-300 bg-white text-slate-700'}`}
+        >
+          {isSidebarCollapsed ? (
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M3 6h18M3 12h18M3 18h18" />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M15 6 9 12l6 6" />
+            </svg>
+          )}
         </button>
 
         <h1 className="font-bold text-base ">Atividades Diárias</h1>

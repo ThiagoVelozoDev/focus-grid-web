@@ -6,6 +6,7 @@ type ThemeMode = 'light' | 'dark'
 type SidebarProps = {
     theme: ThemeMode
     isOpen: boolean
+    isCollapsed: boolean
     onClose: () => void
 }
 
@@ -21,7 +22,7 @@ const getNavClass = (isActive: boolean, isDark: boolean) => {
         : 'w-full cursor-pointer text-slate-600 hover:bg-slate-200 hover:text-slate-900'
 }
 
-export function Sidebar({ theme, isOpen, onClose }: SidebarProps) {
+export function Sidebar({ theme, isOpen, isCollapsed, onClose }: SidebarProps) {
     const location = useLocation()
     const [showConfigMenu, setShowConfigMenu] = useState(true)
     const [showTasksMenu, setShowTasksMenu] = useState(true)
@@ -42,7 +43,8 @@ export function Sidebar({ theme, isOpen, onClose }: SidebarProps) {
             )}
 
             <aside
-                className={`fixed left-0 top-0 z-40 h-screen w-[280px] overflow-y-auto border-r px-4 py-5 transition-transform duration-200 lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'
+                className={`fixed left-0 top-0 z-40 h-screen w-[280px] overflow-y-auto border-r px-4 py-5 transition-transform duration-200 ${isOpen ? 'translate-x-0' : '-translate-x-full'
+                    } ${isCollapsed ? 'lg:-translate-x-full' : 'lg:translate-x-0'
                     } ${isDark ? 'border-[#2b2b2b] bg-[#181818]' : 'border-slate-200 bg-white'}`}
             >
                 <div className="mb-5">

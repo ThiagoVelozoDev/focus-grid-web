@@ -36,6 +36,7 @@ export function AppLayout({ theme, onToggleTheme }: AppLayoutProps) {
   const locaisHook = useCatalog('locais')
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   const isDark = theme === 'dark'
 
@@ -68,13 +69,20 @@ export function AppLayout({ theme, onToggleTheme }: AppLayoutProps) {
 
   return (
     <div className={`min-h-screen ${isDark ? 'bg-[#181818] text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
-      <Sidebar theme={theme} isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Sidebar
+        theme={theme}
+        isOpen={sidebarOpen}
+        isCollapsed={sidebarCollapsed}
+        onClose={() => setSidebarOpen(false)}
+      />
 
-      <div className="min-w-0 lg:ml-[280px]">
+      <div className={`min-w-0 transition-[margin] duration-200 ${sidebarCollapsed ? 'lg:ml-0' : 'lg:ml-[280px]'}`}>
         <AppHeader
           theme={theme}
           userEmail={user?.email}
           onOpenSidebar={() => setSidebarOpen(true)}
+          isSidebarCollapsed={sidebarCollapsed}
+          onToggleSidebarCollapse={() => setSidebarCollapsed((current) => !current)}
           onToggleTheme={onToggleTheme}
           onSignOut={() => void handleSignOut()}
         />
