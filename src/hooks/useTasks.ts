@@ -265,8 +265,7 @@ export function useTasks(): TaskActions {
 
   const addAcompanhamento = useCallback(
     async (id: string, texto: string) => {
-      const cleanText = texto.trim()
-      if (!cleanText) {
+      if (!texto.trim()) {
         return
       }
 
@@ -277,7 +276,7 @@ export function useTasks(): TaskActions {
           ...task.acompanhamentos,
           {
             id: crypto.randomUUID(),
-            texto: cleanText,
+            texto,
             createdAt: nowIso(),
           },
         ],
@@ -288,8 +287,7 @@ export function useTasks(): TaskActions {
 
   const updateAcompanhamento = useCallback(
     async (taskId: string, acompanhamentoId: string, texto: string) => {
-      const cleanText = texto.trim()
-      if (!cleanText) {
+      if (!texto.trim()) {
         return
       }
 
@@ -303,7 +301,7 @@ export function useTasks(): TaskActions {
 
           return {
             ...item,
-            texto: cleanText,
+            texto,
           }
         }),
       }))

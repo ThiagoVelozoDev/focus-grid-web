@@ -572,8 +572,8 @@ export function Dashboard({ responsaveis, locais, theme }: DashboardProps) {
       return
     }
 
-    const texto = novoAcompanhamento.trim()
-    if (!texto) {
+    const texto = novoAcompanhamento
+    if (!texto.trim()) {
       return
     }
 
@@ -601,8 +601,8 @@ export function Dashboard({ responsaveis, locais, theme }: DashboardProps) {
       return
     }
 
-    const texto = editingAcompanhamentoTexto.trim()
-    if (!texto) {
+    const texto = editingAcompanhamentoTexto
+    if (!texto.trim()) {
       return
     }
 
@@ -859,7 +859,7 @@ export function Dashboard({ responsaveis, locais, theme }: DashboardProps) {
                           </div>
                         </div>
                       ) : (
-                        <p className={`mt-1 text-sm ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>{item.texto}</p>
+                        <p className={`mt-1 whitespace-pre-wrap text-sm ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>{item.texto}</p>
                       )}
                     </li>
                   ))}
