@@ -26,6 +26,14 @@ body {
   color: rgb(15 23 42);
 }
 
+:root.theme-dark body {
+  background:
+    radial-gradient(circle at 12% 18%, rgba(34, 211, 238, 0.12), transparent 22%),
+    radial-gradient(circle at 85% 10%, rgba(16, 185, 129, 0.1), transparent 24%),
+    linear-gradient(180deg, #020617 0%, #0b1220 60%, #111827 100%);
+  color: rgb(226 232 240);
+}
+
 #root {
   min-height: 100vh;
 }

@@ -3,8 +3,11 @@ import type { Task, TaskInput } from '../types/task'
 
 type TaskFormProps = {
   editingTask: Task | null
-  onSubmitTask: (input: TaskInput) => void
+  onSubmitTask: (input: TaskInput) => void | Promise<void>
   onCancelEdit: () => void
+  responsaveis: string[]
+  locais: string[]
+  theme: 'light' | 'dark'
 }
 
 const initialTask: TaskInput = {
@@ -16,7 +19,7 @@ const initialTask: TaskInput = {
   quando: '',
   quem: '',
   como: '',
-  quantoCusta: '',
+  quantoCusta: 0,
   status: 'pending',
   priority: 'medium',
 }
@@ -41,8 +44,16 @@ const buildInitialForm = (editingTask: Task | null): TaskInput => {
   }
 }
 
-export function TaskForm({ editingTask, onSubmitTask, onCancelEdit }: TaskFormProps) {
+export function TaskForm({ editingTask, onSubmitTask, onCancelEdit, responsaveis, locais, theme }: TaskFormProps) {
   const [form, setForm] = useState<TaskInput>(() => buildInitialForm(editingTask))
+
+  const responsavelOptions = Array.from(new Set([...responsaveis, editingTask?.quem ?? ''].filter(Boolean)))
+  const localOptions = Array.from(new Set([...locais, editingTask?.onde ?? ''].filter(Boolean)))
+  const isDark = theme === 'dark'
+
+  const fieldClass = `rounded-xl border px-3 py-2 outline-none transition ${
+    isDark ? 'border-slate-700 bg-slate-900 text-slate-100 ring-cyan-400 focus:ring' : 'border-slate-200 bg-white ring-sky-300 focus:ring'
+  }`
 
   const handleChange = <K extends keyof TaskInput>(key: K, value: TaskInput[K]) => {
     setForm((current) => ({ ...current, [key]: value }))
@@ -58,23 +69,23 @@ export function TaskForm({ editingTask, onSubmitTask, onCancelEdit }: TaskFormPr
   }
 
   return (
-    <form onSubmit={handleSubmit} className="grid gap-5 rounded-3xl border border-white/60 bg-white/80 p-6 shadow-lg backdrop-blur">
-      <h2 className="text-xl font-semibold text-slate-900">
+    <form onSubmit={handleSubmit} className={`grid gap-5 rounded-3xl border p-6 shadow-lg ${isDark ? 'border-slate-700 bg-slate-950 text-slate-100' : 'border-white/60 bg-white/80'}`}>
+      <h2 className={`text-xl font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>
         {editingTask ? 'Editar tarefa 5W2H' : 'Nova tarefa 5W2H'}
       </h2>
 
-      <label className="grid gap-2 text-sm font-medium text-slate-700">
+      <label className={`grid gap-2 text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
         O que sera feito?
         <input
           required
           value={form.oQue}
           onChange={(event) => handleChange('oQue', event.target.value)}
           placeholder="Descreva a tarefa"
-          className="rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none ring-sky-300 transition focus:ring"
+          className={fieldClass}
         />
       </label>
 
-      <label className="grid gap-2 text-sm font-medium text-slate-700">
+      <label className={`grid gap-2 text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
         Por que isso deve ser feito?
         <textarea
           required
@@ -82,11 +93,11 @@ export function TaskForm({ editingTask, onSubmitTask, onCancelEdit }: TaskFormPr
           value={form.porQue}
           onChange={(event) => handleChange('porQue', event.target.value)}
           placeholder="Motivo e impacto esperado"
-          className="rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none ring-sky-300 transition focus:ring"
+          className={fieldClass}
         />
       </label>
 
-      <label className="grid gap-2 text-sm font-medium text-slate-700">
+      <label className={`grid gap-2 text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
         Detalhamento da tarefa
         <textarea
           required
@@ -94,86 +105,56 @@ export function TaskForm({ editingTask, onSubmitTask, onCancelEdit }: TaskFormPr
           value={form.detalhamento}
           onChange={(event) => handleChange('detalhamento', event.target.value)}
           placeholder="Descreva contexto, premissas, etapas e observacoes importantes"
-          className="rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none ring-sky-300 transition focus:ring"
+          className={fieldClass}
         />
       </label>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <label className="grid gap-2 text-sm font-medium text-slate-700">
+        <label className={`grid gap-2 text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
           Onde sera executado?
-          <input
-            required
-            value={form.onde}
-            onChange={(event) => handleChange('onde', event.target.value)}
-            placeholder="Local, sistema ou contexto"
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none ring-sky-300 transition focus:ring"
-          />
+          <select required value={form.onde} onChange={(event) => handleChange('onde', event.target.value)} className={fieldClass}>
+            <option value="">Selecione...</option>
+            {localOptions.map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
+          </select>
         </label>
 
-        <label className="grid gap-2 text-sm font-medium text-slate-700">
+        <label className={`grid gap-2 text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
           Quem e responsavel?
-          <input
-            required
-            value={form.quem}
-            onChange={(event) => handleChange('quem', event.target.value)}
-            placeholder="Pessoa responsavel"
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none ring-sky-300 transition focus:ring"
-          />
+          <select required value={form.quem} onChange={(event) => handleChange('quem', event.target.value)} className={fieldClass}>
+            <option value="">Selecione...</option>
+            {responsavelOptions.map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
+          </select>
         </label>
       </div>
 
-      <label className="grid gap-2 text-sm font-medium text-slate-700">
+      <label className={`grid gap-2 text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
         Como sera feito?
-        <input
-          required
-          value={form.como}
-          onChange={(event) => handleChange('como', event.target.value)}
-          placeholder="Metodo, processo ou estrategia"
-          className="rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none ring-sky-300 transition focus:ring"
-        />
+        <input required value={form.como} onChange={(event) => handleChange('como', event.target.value)} placeholder="Metodo, processo ou estrategia" className={fieldClass} />
       </label>
 
-      <label className="grid gap-2 text-sm font-medium text-slate-700">
+      <label className={`grid gap-2 text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
         Quanto vai custar?
-        <input
-          required
-          value={form.quantoCusta}
-          onChange={(event) => handleChange('quantoCusta', event.target.value)}
-          placeholder="Tempo, dinheiro ou recursos"
-          className="rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none ring-sky-300 transition focus:ring"
-        />
+        <input required type="number" min={0} step="0.01" value={form.quantoCusta} onChange={(event) => handleChange('quantoCusta', Number(event.target.value))} placeholder="0.00" className={fieldClass} />
       </label>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
-        <label className="grid gap-2 text-sm font-medium text-slate-700">
+        <label className={`grid gap-2 text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
           Data inicio
-          <input
-            required
-            type="date"
-            value={form.dataInicio}
-            onChange={(event) => handleChange('dataInicio', event.target.value)}
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none ring-sky-300 transition focus:ring"
-          />
+          <input required type="date" value={form.dataInicio} onChange={(event) => handleChange('dataInicio', event.target.value)} className={fieldClass} />
         </label>
 
-        <label className="grid gap-2 text-sm font-medium text-slate-700">
+        <label className={`grid gap-2 text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
           Quando (prazo)
-          <input
-            required
-            type="date"
-            value={form.quando}
-            onChange={(event) => handleChange('quando', event.target.value)}
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none ring-sky-300 transition focus:ring"
-          />
+          <input required type="date" value={form.quando} onChange={(event) => handleChange('quando', event.target.value)} className={fieldClass} />
         </label>
 
-        <label className="grid gap-2 text-sm font-medium text-slate-700">
+        <label className={`grid gap-2 text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
           Status
-          <select
-            value={form.status}
-            onChange={(event) => handleChange('status', event.target.value as TaskInput['status'])}
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none ring-sky-300 transition focus:ring"
-          >
+          <select value={form.status} onChange={(event) => handleChange('status', event.target.value as TaskInput['status'])} className={fieldClass}>
             <option value="pending">Pendente</option>
             <option value="todo">A fazer</option>
             <option value="doing">Em andamento</option>
@@ -181,13 +162,9 @@ export function TaskForm({ editingTask, onSubmitTask, onCancelEdit }: TaskFormPr
           </select>
         </label>
 
-        <label className="grid gap-2 text-sm font-medium text-slate-700">
+        <label className={`grid gap-2 text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
           Prioridade
-          <select
-            value={form.priority}
-            onChange={(event) => handleChange('priority', event.target.value as TaskInput['priority'])}
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none ring-sky-300 transition focus:ring"
-          >
+          <select value={form.priority} onChange={(event) => handleChange('priority', event.target.value as TaskInput['priority'])} className={fieldClass}>
             <option value="low">Baixa</option>
             <option value="medium">Media</option>
             <option value="high">Alta</option>
@@ -196,17 +173,10 @@ export function TaskForm({ editingTask, onSubmitTask, onCancelEdit }: TaskFormPr
       </div>
 
       <div className="mt-1 flex flex-wrap gap-2">
-        <button
-          type="submit"
-          className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-500"
-        >
+        <button type="submit" className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${isDark ? 'bg-cyan-500 text-slate-950 hover:bg-cyan-400' : 'bg-sky-600 text-white hover:bg-sky-500'}`}>
           {editingTask ? 'Salvar alteracoes' : 'Criar tarefa'}
         </button>
-        <button
-          type="button"
-          onClick={onCancelEdit}
-          className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
-        >
+        <button type="button" onClick={onCancelEdit} className={`rounded-xl border px-4 py-2 text-sm font-semibold transition ${isDark ? 'border-slate-700 text-slate-200 hover:bg-slate-800' : 'border-slate-300 text-slate-700 hover:bg-slate-100'}`}>
           Fechar
         </button>
       </div>

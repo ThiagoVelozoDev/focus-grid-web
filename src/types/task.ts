@@ -17,7 +17,7 @@ export type TaskInput = {
   quando: string
   quem: string
   como: string
-  quantoCusta: string
+  quantoCusta: number
   status: TaskStatus
   priority: TaskPriority
 }
@@ -31,3 +31,5 @@ export type Task = TaskInput & {
 }
 
 export type TaskFilter = TaskStatus | 'all'
+
+export type TaskPriorityFilter = TaskPriority | 'all'

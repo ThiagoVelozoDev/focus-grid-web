@@ -1,0 +1,36 @@
+import { Navigate, Route, Routes } from 'react-router-dom'
+import { PublicOnly, RequireAuth } from '../middleware/AuthGuard'
+import { AppLayout } from '../layouts/AppLayout'
+import { DashboardReportPage } from '../pages/DashboardReport'
+import { HomePage } from '../pages/Home'
+import { LoginPage } from '../pages/Login'
+import { LocaisPage } from '../pages/Locais'
+import { ResponsaveisPage } from '../pages/Responsaveis'
+
+type ThemeMode = 'light' | 'dark'
+
+type AppRoutesProps = {
+  theme: ThemeMode
+  onToggleTheme: () => void
+}
+
+export function AppRoutes({ theme, onToggleTheme }: AppRoutesProps) {
+  return (
+    <Routes>
+      <Route element={<PublicOnly />}>
+        <Route path="/login" element={<LoginPage />} />
+      </Route>
+
+      <Route element={<RequireAuth />}>
+        <Route path="/" element={<AppLayout theme={theme} onToggleTheme={onToggleTheme} />}>
+          <Route index element={<HomePage />} />
+          <Route path="dashboard" element={<DashboardReportPage />} />
+          <Route path="configuracoes/tarefas/responsaveis" element={<ResponsaveisPage />} />
+          <Route path="configuracoes/tarefas/locais" element={<LocaisPage />} />
+        </Route>
+      </Route>
+
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  )
+}

@@ -34,6 +34,21 @@ const buildTask = (input: TaskInput): Task => {
 const asRecord = (value: unknown): Record<string, unknown> =>
   typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
 
+const asCurrencyNumber = (value: unknown) => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value
+  }
+
+  if (typeof value === 'string') {
+    const normalized = Number(value.replace(',', '.'))
+    if (Number.isFinite(normalized)) {
+      return normalized
+    }
+  }
+
+  return 0
+}
+
 const normalizeTask = (rawValue: unknown): Task => {
   const raw = asRecord(rawValue)
   const createdAt = typeof raw.createdAt === 'string' ? raw.createdAt : nowIso()
@@ -59,7 +74,7 @@ const normalizeTask = (rawValue: unknown): Task => {
     quando: typeof raw.quando === 'string' ? raw.quando : typeof raw.timeBound === 'string' ? raw.timeBound : '',
     quem: typeof raw.quem === 'string' ? raw.quem : '',
     como: typeof raw.como === 'string' ? raw.como : typeof raw.measurable === 'string' ? raw.measurable : '',
-    quantoCusta: typeof raw.quantoCusta === 'string' ? raw.quantoCusta : '',
+    quantoCusta: asCurrencyNumber(raw.quantoCusta),
     status: raw.status === 'pending' || raw.status === 'doing' || raw.status === 'done' || raw.status === 'todo' ? raw.status : 'pending',
     priority: raw.priority === 'low' || raw.priority === 'high' ? raw.priority : 'medium',
     acompanhamentos,
