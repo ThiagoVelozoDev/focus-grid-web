@@ -279,8 +279,8 @@ export function Dashboard({ responsaveis, locais, theme }: DashboardProps) {
   const [sortColumn, setSortColumn] = useState<SortColumn>('quando')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
   const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(5)
   const isDark = theme === 'dark'
-  const itemsPerPage = 4
 
   const detailTask = useMemo(
     () => tasks.find((task) => task.id === detailTaskId) ?? null,
@@ -754,11 +754,11 @@ export function Dashboard({ responsaveis, locais, theme }: DashboardProps) {
 
       {detailTask && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/45 p-4 backdrop-blur-sm sm:items-center"
           onClick={closeDetailDialog}
         >
           <article
-            className={`w-full max-w-2xl rounded-3xl p-6 shadow-2xl ${isDark ? 'bg-[#212121] text-slate-100' : 'bg-white'}`}
+            className={`max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-3xl p-6 shadow-2xl ${isDark ? 'bg-[#212121] text-slate-100' : 'bg-white'}`}
             onClick={(event) => event.stopPropagation()}
           >
             <header className="mb-4 flex items-start justify-between gap-3">
@@ -817,7 +817,7 @@ export function Dashboard({ responsaveis, locais, theme }: DashboardProps) {
                 )}
 
                 {[...detailTask.acompanhamentos]
-                  .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+                  .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
                   .map((item) => (
                     <li key={item.id} className={`rounded-xl border px-3 py-2 ${isDark ? 'border-[#353535] bg-[#212121]' : 'border-slate-200 bg-white'}`}>
                       <div className="flex items-start justify-between gap-2">
@@ -1106,6 +1106,23 @@ export function Dashboard({ responsaveis, locais, theme }: DashboardProps) {
 
         {sortedTrackingRows.length > 0 && (
           <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+            <label className={`flex items-center gap-2 text-sm ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+              Itens por pagina
+              <select
+                value={itemsPerPage}
+                onChange={(event) => {
+                  setItemsPerPage(Number(event.target.value))
+                  setCurrentPage(1)
+                }}
+                className={`rounded-xl border px-2 py-1.5 text-sm font-semibold outline-none ring-cyan-300 transition focus:ring ${isDark ? 'border-[#353535] bg-[#181818] text-slate-200' : 'border-slate-300 bg-white text-slate-700'}`}
+              >
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={30}>30</option>
+              </select>
+            </label>
+
               <span className={`text-sm ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
                 {sortedTrackingRows.length} tarefas listadas
               </span>
