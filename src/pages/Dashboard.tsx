@@ -710,15 +710,7 @@ export function Dashboard({ responsaveis, locais, theme, activeWorkspaceId, acti
   }
 
   const openDetailDialog = (task: Task) => {
-    setDetailTaskId(task.id)
-    setNovaSubtarefa(
-      createEmptySubtask({
-        quem: task.quem,
-        onde: task.onde,
-        dataInicio: task.dataInicio,
-        quando: task.quando,
-      }),
-    )
+    navigate(`/tarefas/${task.id}`)
   }
 
   const closeDetailDialog = () => {
@@ -839,8 +831,8 @@ export function Dashboard({ responsaveis, locais, theme, activeWorkspaceId, acti
       </button>
       <button
         type="button"
-        title="Visualizar detalhamento"
-        aria-label="Visualizar detalhamento"
+        title="Abrir página de detalhamento"
+        aria-label="Abrir página de detalhamento"
         onClick={() => openDetailDialog(task)}
         className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sky-300 text-sky-700 hover:bg-sky-50"
       >
@@ -917,7 +909,7 @@ export function Dashboard({ responsaveis, locais, theme, activeWorkspaceId, acti
 
       {activeWorkspace && (
         <>
-          <section className={`grid gap-2 rounded-3xl mb-8 border p-4 shadow-lg mb-8 backdrop-blur ${isDark ? 'border-[#2f2f2f] bg-[#212121]' : 'border-white/40 bg-white/70'}`}>
+          <section className={`mb-8 grid gap-2 rounded-3xl border p-4 shadow-lg backdrop-blur ${isDark ? 'border-[#2f2f2f] bg-[#212121]' : 'border-white/40 bg-white/70'}`}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className={`font-heading text-lg ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>Workspace atual</h2>

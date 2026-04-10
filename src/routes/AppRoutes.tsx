@@ -9,6 +9,7 @@ import { LocaisPage } from '../pages/Locais'
 import { ResponsaveisPage } from '../pages/Responsaveis'
 import { WorkspacesPage } from '../pages/Workspaces'
 import { TaskEditorPage } from '../pages/TaskEditor'
+import { TaskDetailsPage } from '../pages/TaskDetails'
 
 type ThemeMode = 'light' | 'dark'
 
@@ -30,6 +31,7 @@ export function AppRoutes({ theme, onToggleTheme }: AppRoutesProps) {
           <Route path="dashboard" element={<DashboardReportPage />} />
           <Route path="agenda" element={<AgendaPage />} />
           <Route path="tarefas/nova" element={<TaskEditorPage />} />
+          <Route path="tarefas/:taskId" element={<TaskDetailsPage />} />
           <Route path="tarefas/:taskId/editar" element={<TaskEditorPage />} />
           <Route path="configuracoes/workspaces" element={<WorkspacesPage />} />
           <Route path="configuracoes/tarefas/responsaveis" element={<ResponsaveisPage />} />
