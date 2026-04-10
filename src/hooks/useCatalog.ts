@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { FirebaseError } from 'firebase/app'
-import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore'
+import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, updateDoc, writeBatch } from 'firebase/firestore'
 import { db } from '../services/firebase'
 import { useAuth } from './useAuth'
 
@@ -9,6 +9,7 @@ export type CatalogType = 'responsaveis' | 'locais'
 export type CatalogItem = {
   id: string
   name: string
+  workspaceId: string
   createdAt: string
   updatedAt: string
 }
@@ -33,7 +34,7 @@ const getFirestoreErrorMessage = (error: unknown, type: CatalogType) => {
   return 'Nao foi possivel acessar o catalogo no Firestore. Tente novamente.'
 }
 
-export function useCatalog(type: CatalogType): UseCatalogResult {
+export function useCatalog(type: CatalogType, workspaceId: string): UseCatalogResult {
   const { user } = useAuth()
   const [entries, setEntries] = useState<CatalogItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -48,7 +49,20 @@ export function useCatalog(type: CatalogType): UseCatalogResult {
   }, [type, user])
 
   useEffect(() => {
-    if (!catalogCollection) {
+    if (!user || !workspaceId) {
+      setEntries([])
+      setLoading(false)
+      setErrorMessage(null)
+      return
+    }
+
+    setEntries([])
+    setLoading(true)
+    setErrorMessage(null)
+  }, [type, user?.uid, workspaceId])
+
+  useEffect(() => {
+    if (!catalogCollection || !workspaceId) {
       return
     }
 
@@ -57,17 +71,36 @@ export function useCatalog(type: CatalogType): UseCatalogResult {
     const unsubscribe = onSnapshot(
       catalogQuery,
       (snapshot) => {
+        const legacyEntries = snapshot.docs.filter((entry) => {
+          const data = entry.data() as Partial<CatalogItem>
+          return typeof data.workspaceId !== 'string' || data.workspaceId.trim().length === 0
+        })
+
+        if (legacyEntries.length > 0) {
+          const batch = writeBatch(db)
+
+          for (const entry of legacyEntries) {
+            batch.update(doc(catalogCollection, entry.id), {
+              workspaceId,
+              updatedAt: new Date().toISOString(),
+            })
+          }
+
+          void batch.commit()
+        }
+
         const nextEntries = snapshot.docs
           .map((entry) => {
             const data = entry.data() as Partial<CatalogItem>
             return {
               id: entry.id,
               name: normalizeName(typeof data.name === 'string' ? data.name : ''),
+              workspaceId: typeof data.workspaceId === 'string' && data.workspaceId.trim().length > 0 ? data.workspaceId : workspaceId,
               createdAt: typeof data.createdAt === 'string' ? data.createdAt : new Date().toISOString(),
               updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : new Date().toISOString(),
             }
           })
-          .filter((item) => item.name.length > 0)
+          .filter((item) => item.name.length > 0 && item.workspaceId === workspaceId)
 
         setEntries(nextEntries)
         setErrorMessage(null)
@@ -81,11 +114,11 @@ export function useCatalog(type: CatalogType): UseCatalogResult {
     )
 
     return unsubscribe
-  }, [catalogCollection, type])
+  }, [catalogCollection, type, workspaceId])
 
   const addItem = useCallback(
     async (name: string) => {
-      if (!catalogCollection) {
+      if (!catalogCollection || !workspaceId) {
         return
       }
 
@@ -99,6 +132,7 @@ export function useCatalog(type: CatalogType): UseCatalogResult {
       try {
         await addDoc(catalogCollection, {
           name: normalized,
+          workspaceId,
           createdAt: now,
           updatedAt: now,
         })
@@ -106,7 +140,7 @@ export function useCatalog(type: CatalogType): UseCatalogResult {
         throw new Error(getFirestoreErrorMessage(error, type))
       }
     },
-    [catalogCollection, type],
+    [catalogCollection, type, workspaceId],
   )
 
   const updateItem = useCallback(
@@ -123,13 +157,14 @@ export function useCatalog(type: CatalogType): UseCatalogResult {
       try {
         await updateDoc(doc(catalogCollection, id), {
           name: normalized,
+          workspaceId,
           updatedAt: new Date().toISOString(),
         })
       } catch (error) {
         throw new Error(getFirestoreErrorMessage(error, type))
       }
     },
-    [catalogCollection, type],
+    [catalogCollection, type, workspaceId],
   )
 
   const deleteItem = useCallback(

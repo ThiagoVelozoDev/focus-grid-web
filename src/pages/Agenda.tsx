@@ -120,13 +120,19 @@ export function AgendaPage() {
 
   const [viewMode, setViewMode] = useState<ViewMode>('month')
   const [cursorDate, setCursorDate] = useState(new Date())
-  const [statusFilter, setStatusFilter] = useState<'all' | TaskStatus>('all')
+  const [statusFilter, setStatusFilter] = useState<TaskStatus[]>([])
   const [selectedEvent, setSelectedEvent] = useState<AgendaEvent | null>(null)
 
   const filteredTasks = useMemo(
-    () => (statusFilter === 'all' ? tasks : tasks.filter((task) => task.status === statusFilter)),
+    () => (statusFilter.length === 0 ? tasks : tasks.filter((task) => statusFilter.includes(task.status))),
     [statusFilter, tasks],
   )
+
+  const toggleStatusFilter = (status: TaskStatus) => {
+    setStatusFilter((current) =>
+      current.includes(status) ? current.filter((item) => item !== status) : [...current, status],
+    )
+  }
 
   const events = useMemo(() => filteredTasks.flatMap(buildEvents), [filteredTasks])
 
@@ -231,17 +237,43 @@ export function AgendaPage() {
 
           <div className="flex flex-wrap items-center gap-3">
             <span className={`text-sm font-semibold capitalize ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>{currentPeriodLabel}</span>
-            <select
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value as 'all' | TaskStatus)}
-              className={`rounded-xl border px-3 py-2 text-sm outline-none ${isDark ? 'border-[#353535] bg-[#181818] text-slate-200' : 'border-slate-300 bg-white text-slate-700'}`}
-            >
-              <option value="all">Todos os status</option>
-              <option value="pending">Pendente</option>
-              <option value="todo">A fazer</option>
-              <option value="doing">Em andamento</option>
-              <option value="done">Concluida</option>
-            </select>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setStatusFilter([])}
+                className={`rounded-full px-3 py-2 text-xs font-semibold transition ${
+                  statusFilter.length === 0
+                    ? 'bg-sky-600 text-white'
+                    : isDark
+                      ? 'border border-[#353535] bg-[#181818] text-slate-300 hover:bg-[#2a2a2a]'
+                      : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                Todos
+              </button>
+
+              {(['pending', 'todo', 'doing', 'done'] as TaskStatus[]).map((status) => {
+                const selected = statusFilter.includes(status)
+
+                return (
+                  <button
+                    key={status}
+                    type="button"
+                    onClick={() => toggleStatusFilter(status)}
+                    className={`rounded-full px-3 py-2 text-xs font-semibold transition ${
+                      selected
+                        ? getStatusClasses(status, isDark)
+                        : isDark
+                          ? 'border border-[#353535] bg-[#181818] text-slate-300 hover:bg-[#2a2a2a]'
+                          : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    {statusLabel[status]}
+                  </button>
+                )
+              })}
+            </div>
           </div>
         </div>
 

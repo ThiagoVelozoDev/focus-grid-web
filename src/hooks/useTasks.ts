@@ -15,7 +15,7 @@ import { useAuth } from './useAuth'
 import { db } from '../services/firebase'
 import { taskStorage } from '../services/localStorage'
 import type { TaskAcompanhamento, TaskInput, Task, TaskSubtask } from '../types/task'
-import { DEFAULT_WORKSPACE_ID } from './useWorkspaces'
+import { DEFAULT_WORKSPACE_ID, LEGACY_DEFAULT_WORKSPACE_ID } from './useWorkspaces'
 import { deriveTaskStatusFromSubtasks } from '../utils/taskProgress'
 
 const nowIso = () => new Date().toISOString()
@@ -36,6 +36,19 @@ const asCurrencyNumber = (value: unknown) => {
   }
 
   return 0
+}
+
+const sanitizeTags = (rawValue: unknown): string[] => {
+  const rawTags = Array.isArray(rawValue)
+    ? rawValue
+    : typeof rawValue === 'string'
+      ? rawValue.split(',')
+      : []
+
+  return rawTags
+    .map((item) => (typeof item === 'string' ? item.trim() : ''))
+    .filter(Boolean)
+    .filter((item, index, array) => array.indexOf(item) === index)
 }
 
 const normalizeSubtaskStatus = (value: unknown): TaskSubtask['status'] => {
@@ -112,6 +125,7 @@ const buildTask = (input: TaskInput): Task => {
     id: crypto.randomUUID(),
     ...input,
     workspaceId: input.workspaceId || DEFAULT_WORKSPACE_ID,
+    etiquetas: sanitizeTags(input.etiquetas),
     subtarefas: sanitizeSubtasks(input.subtarefas, currentTime),
     acompanhamentos: [],
     createdAt: currentTime,
@@ -137,7 +151,10 @@ const normalizeTask = (rawValue: unknown): Task => {
 
   return syncTaskDerivedState({
     id: typeof raw.id === 'string' ? raw.id : crypto.randomUUID(),
-    workspaceId: typeof raw.workspaceId === 'string' && raw.workspaceId.trim().length > 0 ? raw.workspaceId : DEFAULT_WORKSPACE_ID,
+    workspaceId:
+      typeof raw.workspaceId === 'string' && raw.workspaceId.trim().length > 0
+        ? raw.workspaceId
+        : LEGACY_DEFAULT_WORKSPACE_ID,
     oQue: typeof raw.oQue === 'string' ? raw.oQue : typeof raw.specific === 'string' ? raw.specific : '',
     porQue: typeof raw.porQue === 'string' ? raw.porQue : typeof raw.relevant === 'string' ? raw.relevant : '',
     detalhamento: typeof raw.detalhamento === 'string' ? raw.detalhamento : '',
@@ -149,6 +166,7 @@ const normalizeTask = (rawValue: unknown): Task => {
     quantoCusta: asCurrencyNumber(raw.quantoCusta),
     status: raw.status === 'pending' || raw.status === 'doing' || raw.status === 'done' || raw.status === 'todo' ? raw.status : 'pending',
     priority: raw.priority === 'low' || raw.priority === 'high' ? raw.priority : 'medium',
+    etiquetas: sanitizeTags(raw.etiquetas),
     subtarefas: sanitizeSubtasks(raw.subtarefas, updatedAt),
     acompanhamentos,
     createdAt,
@@ -204,6 +222,17 @@ export function useTasks(workspaceId = DEFAULT_WORKSPACE_ID): TaskActions {
   }, [user])
 
   useEffect(() => {
+    if (!user) {
+      setTasks([])
+      setLoading(false)
+      return
+    }
+
+    setTasks([])
+    setLoading(true)
+  }, [user?.uid, workspaceId])
+
+  useEffect(() => {
     if (!tasksCollection) {
       return
     }
@@ -227,7 +256,7 @@ export function useTasks(workspaceId = DEFAULT_WORKSPACE_ID): TaskActions {
       return
     }
 
-    const migrationKey = `${taskStorage.migrationPrefix}-${user.uid}`
+    const migrationKey = `${taskStorage.migrationPrefix}-cloud`
 
     if (window.localStorage.getItem(migrationKey) === 'done') {
       return
@@ -244,6 +273,7 @@ export function useTasks(workspaceId = DEFAULT_WORKSPACE_ID): TaskActions {
 
       if (!currentCloud.empty) {
         window.localStorage.setItem(migrationKey, 'done')
+        window.localStorage.removeItem(taskStorage.key)
         return
       }
 
@@ -253,12 +283,13 @@ export function useTasks(workspaceId = DEFAULT_WORKSPACE_ID): TaskActions {
         const ref = doc(tasksCollection, task.id)
         batch.set(ref, {
           ...task,
-          workspaceId: task.workspaceId || DEFAULT_WORKSPACE_ID,
+          workspaceId: task.workspaceId || LEGACY_DEFAULT_WORKSPACE_ID,
         })
       }
 
       await batch.commit()
       window.localStorage.setItem(migrationKey, 'done')
+      window.localStorage.removeItem(taskStorage.key)
     }
 
     void migrateLegacyTasks()
@@ -270,9 +301,14 @@ export function useTasks(workspaceId = DEFAULT_WORKSPACE_ID): TaskActions {
         return
       }
 
+      const resolvedWorkspaceId = input.workspaceId || workspaceId
+      if (!resolvedWorkspaceId) {
+        throw new Error('Crie ou selecione um workspace antes de salvar a tarefa.')
+      }
+
       const task = buildTask({
         ...input,
-        workspaceId: input.workspaceId || workspaceId,
+        workspaceId: resolvedWorkspaceId,
       })
 
       await setDoc(doc(tasksCollection, task.id), task)

@@ -35,7 +35,7 @@ export const deriveTaskStatusFromSubtasks = (
   }
 
   if (completed === 0) {
-    return 'pending'
+    return fallbackStatus === 'done' ? 'pending' : fallbackStatus
   }
 
   if (completed === total) {

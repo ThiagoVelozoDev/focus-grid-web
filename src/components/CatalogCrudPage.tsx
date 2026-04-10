@@ -104,7 +104,7 @@ export function CatalogCrudPage({
 
   return (
     <main className="mx-auto grid w-[96%] gap-8 py-8 md:w-[92%] xl:w-[90%] ">
-      <section className={`rounded-3xl border p-5 shadow-sm ${isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-white mb-5'}`}>
+      <section className={`rounded-3xl mb-8 border p-5 shadow-sm ${isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-white mb-5'}`}>
         <h2 className="font-heading text-2xl">{title}</h2>
         <p className={`mt-2 text-sm ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>{description}</p>
 
@@ -118,7 +118,7 @@ export function CatalogCrudPage({
           </p>
         )}
 
-        <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto] mb">
+        <div className="mt-4  mb grid gap-3 md:grid-cols-[1fr_auto] mb">
           <input
             value={newValue}
             onChange={(event) => setNewValue(event.target.value)}

@@ -69,8 +69,10 @@ export function AppHeader({
           <select
             value={activeWorkspaceId}
             onChange={(event) => onChangeWorkspace(event.target.value)}
-            className={`rounded-lg border px-2 py-1 text-xs outline-none ${isDark ? 'border-[#353535] bg-[#181818] text-slate-100' : 'border-slate-300 bg-white text-slate-700'}`}
+            disabled={workspaces.length === 0}
+            className={`rounded-lg border px-2 py-1 text-xs outline-none disabled:cursor-not-allowed disabled:opacity-60 ${isDark ? 'border-[#353535] bg-[#181818] text-slate-100' : 'border-slate-300 bg-white text-slate-700'}`}
           >
+            {workspaces.length === 0 ? <option value="">Nenhum workspace</option> : null}
             {workspaces.map((workspace) => (
               <option key={workspace.id} value={workspace.id}>
                 {workspace.name}

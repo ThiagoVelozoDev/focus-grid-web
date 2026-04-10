@@ -28,6 +28,7 @@ const buildInitialForm = (editingTask: Task | null, workspaceId: string): TaskIn
       quantoCusta: 0,
       status: 'pending',
       priority: 'medium',
+      etiquetas: [],
       subtarefas: [],
     }
   }
@@ -45,6 +46,7 @@ const buildInitialForm = (editingTask: Task | null, workspaceId: string): TaskIn
     quantoCusta: editingTask.quantoCusta,
     status: editingTask.status,
     priority: editingTask.priority,
+    etiquetas: editingTask.etiquetas,
     subtarefas: editingTask.subtarefas,
   }
 }
@@ -60,6 +62,7 @@ export function TaskForm({
   theme,
 }: TaskFormProps) {
   const [form, setForm] = useState<TaskInput>(() => buildInitialForm(editingTask, workspaceId))
+  const [tagsInput, setTagsInput] = useState(() => (editingTask?.etiquetas ?? []).join(', '))
 
   const responsavelOptions = Array.from(new Set([...responsaveis, editingTask?.quem ?? ''].filter(Boolean)))
   const localOptions = Array.from(new Set([...locais, editingTask?.onde ?? ''].filter(Boolean)))
@@ -107,14 +110,22 @@ export function TaskForm({
       }))
       .filter((item) => item.descricao.length > 0)
 
+    const etiquetas = tagsInput
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .filter((item, index, array) => array.indexOf(item) === index)
+
     void onSubmitTask({
       ...form,
       workspaceId: form.workspaceId,
+      etiquetas,
       subtarefas,
     })
 
     if (!editingTask) {
       setForm(buildInitialForm(null, workspaceId))
+      setTagsInput('')
     }
   }
 
@@ -139,6 +150,19 @@ export function TaskForm({
           placeholder="Descreva a tarefa"
           className={fieldClass}
         />
+      </label>
+
+      <label className={`grid gap-2 text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+        Etiquetas
+        <input
+          value={tagsInput}
+          onChange={(event) => setTagsInput(event.target.value)}
+          placeholder="Ex.: financeiro, cliente A, urgente"
+          className={fieldClass}
+        />
+        <span className={`text-xs font-normal ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+          Separe por vírgula para destacar rapidamente o contexto da atividade.
+        </span>
       </label>
 
       <label className={`grid gap-2 text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
@@ -442,7 +466,7 @@ export function TaskForm({
           {editingTask ? 'Salvar alteracoes' : 'Criar tarefa'}
         </button>
         <button type="button" onClick={onCancelEdit} className={`rounded-xl border px-4 py-2 text-sm font-semibold transition ${isDark ? 'border-slate-700 text-slate-200 hover:bg-slate-800' : 'border-slate-300 text-slate-700 hover:bg-slate-100'}`}>
-          Fechar
+          Voltar
         </button>
       </div>
     </form>

@@ -77,8 +77,10 @@ export function WorkspacesPage() {
               <select
                 value={activeWorkspaceId}
                 onChange={(event) => setActiveWorkspaceId(event.target.value)}
-                className={`rounded-xl border px-3 py-2 text-sm outline-none ring-cyan-300 transition focus:ring ${isDark ? 'border-[#353535] bg-[#212121] text-slate-100' : 'border-slate-300 bg-white text-slate-700'}`}
+                disabled={workspaces.length === 0}
+                className={`rounded-xl border px-3 py-2 text-sm outline-none ring-cyan-300 transition focus:ring disabled:cursor-not-allowed disabled:opacity-60 ${isDark ? 'border-[#353535] bg-[#212121] text-slate-100' : 'border-slate-300 bg-white text-slate-700'}`}
               >
+                {workspaces.length === 0 ? <option value="">Nenhum workspace cadastrado</option> : null}
                 {workspaces.map((workspace) => (
                   <option key={workspace.id} value={workspace.id}>
                     {workspace.name} ({workspaceKindLabel[workspace.kind]})
@@ -86,7 +88,11 @@ export function WorkspacesPage() {
                 ))}
               </select>
               <span className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                {workspacesLoading ? 'Carregando workspaces...' : `${workspaces.length} workspace(s) sincronizado(s) com o Firebase.`}
+                {workspacesLoading
+                  ? 'Carregando workspaces...'
+                  : workspaces.length === 0
+                    ? 'Nenhum workspace ainda. Crie o primeiro para começar.'
+                    : `${workspaces.length} workspace(s) sincronizado(s) com o Firebase.`}
               </span>
             </label>
 

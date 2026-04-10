@@ -4,14 +4,14 @@ import { toast } from 'sonner'
 import { AppHeader } from '../components/Header'
 import { Sidebar } from '../components/Sidebar'
 import { useAuth } from '../hooks/useAuth'
-import { useCatalog } from '../hooks/useCatalog'
+import { useCatalog, type CatalogItem } from '../hooks/useCatalog'
 import { useWorkspaces } from '../hooks/useWorkspaces'
 import type { Workspace, WorkspaceKind } from '../types/workspace'
 
 type ThemeMode = 'light' | 'dark'
 
 type CatalogContext = {
-  entries: Array<{ id: string; name: string; createdAt: string; updatedAt: string }>
+  entries: CatalogItem[]
   loading: boolean
   errorMessage: string | null
   addItem: (name: string) => Promise<void>
@@ -41,9 +41,9 @@ type AppLayoutProps = {
 
 export function AppLayout({ theme, onToggleTheme }: AppLayoutProps) {
   const { user, signOutUser } = useAuth()
-  const responsaveisHook = useCatalog('responsaveis')
-  const locaisHook = useCatalog('locais')
   const workspacesHook = useWorkspaces()
+  const responsaveisHook = useCatalog('responsaveis', workspacesHook.activeWorkspaceId)
+  const locaisHook = useCatalog('locais', workspacesHook.activeWorkspaceId)
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)

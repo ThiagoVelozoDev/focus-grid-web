@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { FirebaseError } from 'firebase/app'
-import { addDoc, collection, doc, getDocs, onSnapshot, orderBy, query, setDoc } from 'firebase/firestore'
+import { addDoc, collection, doc, getDocs, onSnapshot, orderBy, query, writeBatch } from 'firebase/firestore'
 import { db } from '../services/firebase'
 import { useAuth } from './useAuth'
 import type { Workspace, WorkspaceKind } from '../types/workspace'
 
 const nowIso = () => new Date().toISOString()
 const WORKSPACE_STORAGE_PREFIX = 'focus-grid-active-workspace'
-export const DEFAULT_WORKSPACE_ID = 'workspace-work'
+export const LEGACY_DEFAULT_WORKSPACE_ID = 'workspace-work'
+export const LEGACY_PERSONAL_WORKSPACE_ID = 'workspace-personal'
+export const DEFAULT_WORKSPACE_ID = ''
 const DEFAULT_WORKSPACE_NAME = 'Amazonas Energia'
-const DEFAULT_PERSONAL_WORKSPACE_ID = 'workspace-personal'
 
 const normalizeWorkspace = (id: string, rawValue: unknown): Workspace => {
   const raw = typeof rawValue === 'object' && rawValue !== null ? (rawValue as Record<string, unknown>) : {}
@@ -23,25 +24,25 @@ const normalizeWorkspace = (id: string, rawValue: unknown): Workspace => {
   }
 }
 
-const buildFallbackWorkspaces = (): Workspace[] => {
-  const timestamp = nowIso()
-
-  return [
-    {
-      id: DEFAULT_WORKSPACE_ID,
+const getRecoveredWorkspaceData = (workspaceId: string): Pick<Workspace, 'name' | 'kind'> => {
+  if (workspaceId === LEGACY_DEFAULT_WORKSPACE_ID) {
+    return {
       name: DEFAULT_WORKSPACE_NAME,
       kind: 'work',
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    },
-    {
-      id: DEFAULT_PERSONAL_WORKSPACE_ID,
+    }
+  }
+
+  if (workspaceId === LEGACY_PERSONAL_WORKSPACE_ID) {
+    return {
       name: 'Pessoal',
       kind: 'personal',
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    },
-  ]
+    }
+  }
+
+  return {
+    name: 'Workspace recuperado',
+    kind: 'work',
+  }
 }
 
 const getWorkspaceErrorMessage = (error: unknown) => {
@@ -64,7 +65,7 @@ type UseWorkspacesResult = {
 
 export function useWorkspaces(): UseWorkspacesResult {
   const { user } = useAuth()
-  const [workspaces, setWorkspaces] = useState<Workspace[]>(buildFallbackWorkspaces)
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [activeWorkspaceId, setActiveWorkspaceIdState] = useState(DEFAULT_WORKSPACE_ID)
   const [loading, setLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -80,57 +81,22 @@ export function useWorkspaces(): UseWorkspacesResult {
   const storageKey = user ? `${WORKSPACE_STORAGE_PREFIX}-${user.uid}` : WORKSPACE_STORAGE_PREFIX
 
   useEffect(() => {
-    if (!workspacesCollection) {
+    if (!user) {
+      setWorkspaces([])
+      setActiveWorkspaceIdState(DEFAULT_WORKSPACE_ID)
+      setLoading(false)
+      setErrorMessage(null)
       return
     }
 
-    const ensureDefaultWorkspaces = async () => {
-      try {
-        const snapshot = await getDocs(workspacesCollection)
-        const timestamp = nowIso()
-        const workspaceWorkDoc = snapshot.docs.find((entry) => entry.id === DEFAULT_WORKSPACE_ID)
-        const workspacePersonalDoc = snapshot.docs.find((entry) => entry.id === DEFAULT_PERSONAL_WORKSPACE_ID)
-
-        await Promise.all([
-          setDoc(
-            doc(workspacesCollection, DEFAULT_WORKSPACE_ID),
-            {
-              name: DEFAULT_WORKSPACE_NAME,
-              kind: 'work',
-              createdAt:
-                typeof workspaceWorkDoc?.data().createdAt === 'string'
-                  ? workspaceWorkDoc.data().createdAt
-                  : timestamp,
-              updatedAt: timestamp,
-            },
-            { merge: true },
-          ),
-          setDoc(
-            doc(workspacesCollection, DEFAULT_PERSONAL_WORKSPACE_ID),
-            {
-              name: typeof workspacePersonalDoc?.data().name === 'string' ? workspacePersonalDoc.data().name : 'Pessoal',
-              kind: 'personal',
-              createdAt:
-                typeof workspacePersonalDoc?.data().createdAt === 'string'
-                  ? workspacePersonalDoc.data().createdAt
-                  : timestamp,
-              updatedAt: timestamp,
-            },
-            { merge: true },
-          ),
-        ])
-      } catch (error) {
-        setWorkspaces(buildFallbackWorkspaces())
-        setLoading(false)
-        setErrorMessage(getWorkspaceErrorMessage(error))
-      }
-    }
-
-    void ensureDefaultWorkspaces()
-  }, [workspacesCollection])
+    setWorkspaces([])
+    setActiveWorkspaceIdState(DEFAULT_WORKSPACE_ID)
+    setLoading(true)
+    setErrorMessage(null)
+  }, [user?.uid])
 
   useEffect(() => {
-    if (!workspacesCollection) {
+    if (!workspacesCollection || !user) {
       return
     }
 
@@ -138,9 +104,47 @@ export function useWorkspaces(): UseWorkspacesResult {
 
     const unsubscribe = onSnapshot(
       workspacesQuery,
-      (snapshot) => {
+      async (snapshot) => {
+        if (snapshot.empty) {
+          const tasksSnapshot = await getDocs(collection(db, 'users', user.uid, 'tasks'))
+          const recoveredWorkspaceIds = new Set<string>()
+
+          for (const entry of tasksSnapshot.docs) {
+            const data = entry.data() as Record<string, unknown>
+            const workspaceId =
+              typeof data.workspaceId === 'string' && data.workspaceId.trim().length > 0
+                ? data.workspaceId.trim()
+                : LEGACY_DEFAULT_WORKSPACE_ID
+
+            recoveredWorkspaceIds.add(workspaceId)
+          }
+
+          if (recoveredWorkspaceIds.size > 0) {
+            const timestamp = nowIso()
+            const batch = writeBatch(db)
+
+            for (const workspaceId of recoveredWorkspaceIds) {
+              const recoveredWorkspace = getRecoveredWorkspaceData(workspaceId)
+              batch.set(
+                doc(workspacesCollection, workspaceId),
+                {
+                  name: recoveredWorkspace.name,
+                  kind: recoveredWorkspace.kind,
+                  createdAt: timestamp,
+                  updatedAt: timestamp,
+                },
+                { merge: true },
+              )
+            }
+
+            await batch.commit()
+            return
+          }
+        }
+
         const nextWorkspaces = snapshot.docs.map((entry) => normalizeWorkspace(entry.id, entry.data()))
-        setWorkspaces(nextWorkspaces.length > 0 ? nextWorkspaces : buildFallbackWorkspaces())
+
+        setWorkspaces(nextWorkspaces)
         setLoading(false)
         setErrorMessage(null)
 
@@ -148,6 +152,7 @@ export function useWorkspaces(): UseWorkspacesResult {
 
         setActiveWorkspaceIdState((current) => {
           if (nextWorkspaces.length === 0) {
+            window.localStorage.removeItem(storageKey)
             return DEFAULT_WORKSPACE_ID
           }
 
@@ -162,19 +167,21 @@ export function useWorkspaces(): UseWorkspacesResult {
           }
 
           const fallbackId = nextWorkspaces[0]?.id ?? DEFAULT_WORKSPACE_ID
-          window.localStorage.setItem(storageKey, fallbackId)
+          if (fallbackId) {
+            window.localStorage.setItem(storageKey, fallbackId)
+          }
           return fallbackId
         })
       },
       (error) => {
-        setWorkspaces(buildFallbackWorkspaces())
+        setWorkspaces([])
         setLoading(false)
         setErrorMessage(getWorkspaceErrorMessage(error))
       },
     )
 
     return unsubscribe
-  }, [storageKey, workspacesCollection])
+  }, [storageKey, user, workspacesCollection])
 
   const setActiveWorkspaceId = useCallback(
     (workspaceId: string) => {

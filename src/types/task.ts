@@ -41,6 +41,7 @@ export type TaskInput = {
   quantoCusta: number
   status: TaskStatus
   priority: TaskPriority
+  etiquetas: string[]
   subtarefas: TaskSubtask[]
 }
 

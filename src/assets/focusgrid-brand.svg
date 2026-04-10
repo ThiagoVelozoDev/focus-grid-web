@@ -1,0 +1,32 @@
+<svg width="640" height="200" viewBox="0 0 640 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="28" y1="20" x2="612" y2="180" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2A6FE6"/>
+      <stop offset="1" stop-color="#174BB8"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="64" y1="22" x2="170" y2="126" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#D6E7FF" stop-opacity="0.82"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="10" y="10" width="620" height="180" rx="28" fill="url(#bg)"/>
+  <rect x="10" y="10" width="620" height="180" rx="28" stroke="rgba(255,255,255,0.18)"/>
+
+  <g transform="translate(48 35)">
+    <circle cx="56" cy="56" r="46" stroke="url(#glow)" stroke-width="4" opacity="0.9"/>
+    <rect x="28" y="28" width="56" height="56" rx="10" stroke="url(#glow)" stroke-width="4"/>
+    <path d="M56 8V24" stroke="url(#glow)" stroke-width="4" stroke-linecap="round"/>
+    <path d="M56 88V104" stroke="url(#glow)" stroke-width="4" stroke-linecap="round"/>
+    <path d="M8 56H24" stroke="url(#glow)" stroke-width="4" stroke-linecap="round"/>
+    <path d="M88 56H104" stroke="url(#glow)" stroke-width="4" stroke-linecap="round"/>
+    <path d="M21 21L31 31" stroke="url(#glow)" stroke-width="4" stroke-linecap="round"/>
+    <path d="M81 81L91 91" stroke="url(#glow)" stroke-width="4" stroke-linecap="round"/>
+    <path d="M81 31L91 21" stroke="url(#glow)" stroke-width="4" stroke-linecap="round"/>
+    <path d="M21 91L31 81" stroke="url(#glow)" stroke-width="4" stroke-linecap="round"/>
+    <path d="M43 60L52 69L72 45" stroke="url(#glow)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <text x="190" y="92" fill="#FFFFFF" font-family="Manrope, Arial, sans-serif" font-size="42" font-weight="700">FocusGrid</text>
+  <text x="190" y="126" fill="#DCEBFF" font-family="Manrope, Arial, sans-serif" font-size="18" font-weight="600">Planejamento visual de tarefas e metas</text>
+</svg>

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { TaskForm } from '../components/TaskForm'
 import { useTasks } from '../hooks/useTasks.ts'
 import type { TaskInput, Task, TaskStatus, TaskSubtask } from '../types/task'
 import type { Workspace, WorkspaceKind } from '../types/workspace'
@@ -8,6 +8,7 @@ import { createEmptySubtask } from '../utils/subtask'
 import { getTaskProgressSummary } from '../utils/taskProgress'
 
 type Segment = 'dueToday' | 'dueTomorrow' | 'onTime' | 'late' | 'completed'
+type ViewMode = 'table' | 'kanban'
 type SortDirection = 'asc' | 'desc'
 type SortColumn = 'segment' | 'oQue' | 'porQue' | 'onde' | 'quem' | 'como' | 'priority' | 'dataInicio' | 'quando' | 'status' | 'progresso'
 
@@ -197,6 +198,41 @@ function TaskProgress({ task, isDark, compact = false }: TaskProgressProps) {
   )
 }
 
+type TaskTagsProps = {
+  tags: string[]
+  isDark: boolean
+}
+
+function TaskTags({ tags, isDark }: TaskTagsProps) {
+  if (tags.length === 0) {
+    return null
+  }
+
+  const palette = isDark
+    ? [
+        'border-sky-500/30 bg-sky-500/10 text-sky-200',
+        'border-violet-500/30 bg-violet-500/10 text-violet-200',
+        'border-emerald-500/30 bg-emerald-500/10 text-emerald-200',
+        'border-amber-500/30 bg-amber-500/10 text-amber-200',
+      ]
+    : [
+        'border-sky-200 bg-sky-50 text-sky-700',
+        'border-violet-200 bg-violet-50 text-violet-700',
+        'border-emerald-200 bg-emerald-50 text-emerald-700',
+        'border-amber-200 bg-amber-50 text-amber-700',
+      ]
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {tags.map((tag, index) => (
+        <span key={`${tag}-${index}`} className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${palette[index % palette.length]}`}>
+          #{tag}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 type MultiSelectFilterProps = {
   label: string
   options: string[]
@@ -306,17 +342,15 @@ type DashboardProps = {
 }
 
 export function Dashboard({ responsaveis, locais, theme, activeWorkspaceId, activeWorkspace }: DashboardProps) {
-  const { tasks, loading, addTask, updateTask, deleteTask, toggleComplete, addSubtask, toggleSubtask, addAcompanhamento, updateAcompanhamento } = useTasks(activeWorkspaceId)
+  const { tasks, loading, updateTask, deleteTask, toggleComplete, addSubtask, toggleSubtask, addAcompanhamento, updateAcompanhamento } = useTasks(activeWorkspaceId)
   const [statusFilter, setStatusFilter] = useState<string[]>([])
   const [responsavelFilter, setResponsavelFilter] = useState<string[]>([])
   const [localFilter, setLocalFilter] = useState<string[]>([])
   const [priorityFilter, setPriorityFilter] = useState<string[]>([])
-  const [categoryFilter, setCategoryFilter] = useState<string[]>([])
+  const [categoryFilter, setCategoryFilter] = useState<string[]>(['dueToday', 'dueTomorrow', 'onTime', 'late'])
   const [searchTerm, setSearchTerm] = useState('')
-  const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [showDashboard, setShowDashboard] = useState(true)
   const [showFilters, setShowFilters] = useState(true)
-  const [isFormOpen, setIsFormOpen] = useState(false)
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null)
   const [novaSubtarefa, setNovaSubtarefa] = useState<TaskSubtask>(() => createEmptySubtask())
   const [novoAcompanhamento, setNovoAcompanhamento] = useState('')
@@ -326,7 +360,13 @@ export function Dashboard({ responsaveis, locais, theme, activeWorkspaceId, acti
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(5)
+  const [viewMode, setViewMode] = useState<ViewMode>('table')
+  const [kanbanCardsPerColumn, setKanbanCardsPerColumn] = useState(6)
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null)
+  const [dragOverStatus, setDragOverStatus] = useState<TaskStatus | null>(null)
+  const navigate = useNavigate()
   const isDark = theme === 'dark'
+  const hasActiveWorkspace = Boolean(activeWorkspaceId && activeWorkspace)
 
   const detailTask = useMemo(
     () => tasks.find((task) => task.id === detailTaskId) ?? null,
@@ -349,7 +389,7 @@ export function Dashboard({ responsaveis, locais, theme, activeWorkspaceId, acti
     return tasks.filter((task) => {
       const matchesSearch =
         normalizedSearch.length === 0 ||
-        [task.oQue, task.porQue, task.detalhamento, task.quem, task.onde, task.como]
+        [task.oQue, task.porQue, task.detalhamento, task.quem, task.onde, task.como, ...task.etiquetas]
           .some((value) => value.toLocaleLowerCase('pt-BR').includes(normalizedSearch)) ||
         task.subtarefas.some((item) =>
           [item.descricao, item.porQue, item.detalhamento, item.quem, item.onde, item.como]
@@ -519,6 +559,25 @@ export function Dashboard({ responsaveis, locais, theme, activeWorkspaceId, acti
     return sortedTrackingRows.slice(start, start + itemsPerPage)
   }, [itemsPerPage, normalizedPage, sortedTrackingRows])
 
+  const kanbanColumns = useMemo(() => {
+    const base: Record<TaskStatus, Array<{ task: Task; segment: Segment }>> = {
+      pending: [],
+      todo: [],
+      doing: [],
+      done: [],
+    }
+
+    for (const row of categoryFilteredRows) {
+      base[row.task.status].push(row)
+    }
+
+    return {
+      pending: base.pending.sort((left, right) => byNewest(left.task, right.task)),
+      todo: base.todo.sort((left, right) => byNewest(left.task, right.task)),
+      doing: base.doing.sort((left, right) => byNewest(left.task, right.task)),
+      done: base.done.sort((left, right) => byNewest(left.task, right.task)),
+    }
+  }, [categoryFilteredRows])
 
   const handleSort = (column: SortColumn) => {
     if (sortColumn === column) {
@@ -538,26 +597,81 @@ export function Dashboard({ responsaveis, locais, theme, activeWorkspaceId, acti
     return sortDirection === 'asc' ? '↑' : '↓'
   }
 
-  const handleSubmitTask = async (input: TaskInput) => {
-    if (editingTask) {
-      try {
-        await updateTask(editingTask.id, input)
-        toast.success('Tarefa atualizada com sucesso!')
-      } catch {
-        toast.error('Erro ao atualizar a tarefa. Tente novamente.')
-      }
-      setEditingTask(null)
-      setIsFormOpen(false)
+  const syncSubtasksForStatus = (subtarefas: TaskSubtask[], nextStatus: TaskStatus) => {
+    if (subtarefas.length === 0) {
+      return subtarefas
+    }
+
+    const updatedAt = new Date().toISOString()
+
+    if (nextStatus === 'done') {
+      return subtarefas.map((item) => ({
+        ...item,
+        status: 'done' as const,
+        updatedAt,
+        completedAt: updatedAt,
+      }))
+    }
+
+    if (nextStatus === 'doing') {
+      return subtarefas.map((item, index) => ({
+        ...item,
+        status: index === 0 ? ('doing' as const) : ('pending' as const),
+        updatedAt,
+        completedAt: null,
+      }))
+    }
+
+    const resetStatus = nextStatus === 'todo' ? ('todo' as const) : ('pending' as const)
+
+    return subtarefas.map((item) => ({
+      ...item,
+      status: resetStatus,
+      updatedAt,
+      completedAt: null,
+    }))
+  }
+
+  const handleMoveTaskToStatus = async (task: Task, nextStatus: TaskStatus) => {
+    if (task.status === nextStatus) {
       return
     }
 
-    try {
-      await addTask(input)
-      toast.success('Tarefa criada com sucesso!')
-    } catch {
-      toast.error('Erro ao criar a tarefa. Tente novamente.')
+    const nextInput: TaskInput = {
+      workspaceId: task.workspaceId,
+      oQue: task.oQue,
+      porQue: task.porQue,
+      detalhamento: task.detalhamento,
+      onde: task.onde,
+      dataInicio: task.dataInicio,
+      quando: task.quando,
+      quem: task.quem,
+      como: task.como,
+      quantoCusta: task.quantoCusta,
+      status: nextStatus,
+      priority: task.priority,
+      etiquetas: task.etiquetas,
+      subtarefas: syncSubtasksForStatus(task.subtarefas, nextStatus),
     }
-    setIsFormOpen(false)
+
+    try {
+      await updateTask(task.id, nextInput)
+      toast.success(`Tarefa movida para ${statusLabel[nextStatus].toLowerCase()}.`)
+    } catch {
+      toast.error('Erro ao mover a tarefa no kanban.')
+    }
+  }
+
+  const handleKanbanDrop = async (nextStatus: TaskStatus) => {
+    const activeTask = tasks.find((task) => task.id === draggedTaskId)
+    setDragOverStatus(null)
+    setDraggedTaskId(null)
+
+    if (!activeTask) {
+      return
+    }
+
+    await handleMoveTaskToStatus(activeTask, nextStatus)
   }
 
   const handleToggleComplete = (id: string) => {
@@ -574,10 +688,6 @@ export function Dashboard({ responsaveis, locais, theme, activeWorkspaceId, acti
   }
 
   const handleDeleteTask = async (id: string) => {
-    if (editingTask?.id === id) {
-      setEditingTask(null)
-    }
-
     try {
       await deleteTask(id)
       toast.success('Tarefa excluida com sucesso.')
@@ -587,18 +697,16 @@ export function Dashboard({ responsaveis, locais, theme, activeWorkspaceId, acti
   }
 
   const openNewTaskDialog = () => {
-    setEditingTask(null)
-    setIsFormOpen(true)
+    if (!activeWorkspaceId || !activeWorkspace) {
+      toast.info('Crie um workspace e selecione-o antes de cadastrar tarefas.')
+      return
+    }
+
+    navigate('/tarefas/nova')
   }
 
   const openEditDialog = (task: Task) => {
-    setEditingTask(task)
-    setIsFormOpen(true)
-  }
-
-  const handleCloseDialog = () => {
-    setEditingTask(null)
-    setIsFormOpen(false)
+    navigate(`/tarefas/${task.id}/editar`)
   }
 
   const openDetailDialog = (task: Task) => {
@@ -769,6 +877,36 @@ export function Dashboard({ responsaveis, locais, theme, activeWorkspaceId, acti
     </div>
   )
 
+  if (!loading && !hasActiveWorkspace) {
+    return (
+      <main className={`mx-auto grid w-[96%] py-8 md:w-[92%] xl:w-[90%] ${theme === 'dark' ? 'text-slate-100' : ''}`}>
+        <section className={`grid gap-4 rounded-3xl border p-6 shadow-lg ${isDark ? 'border-[#2f2f2f] bg-[#212121]' : 'border-slate-200 bg-white'}`}>
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-600 text-white">
+            <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5h4L11 7h7.5A2.5 2.5 0 0 1 21 9.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 18.5v-11Z" />
+            </svg>
+          </div>
+
+          <div>
+            <h2 className={`font-heading text-2xl ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>Nenhum workspace encontrado</h2>
+            <p className={`mt-2 max-w-2xl text-sm ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+              Este usuário ainda não possui workspaces salvos no Firebase. Crie o primeiro workspace para começar a cadastrar tarefas, responsáveis e locais.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Link
+              to="/configuracoes/workspaces"
+              className="inline-flex items-center gap-2 rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-500"
+            >
+              Criar primeiro workspace
+            </Link>
+          </div>
+        </section>
+      </main>
+    )
+  }
+
   return (
     <main className={`mx-auto grid w-[96%] py-8 md:w-[92%] md:gap-10 xl:w-[90%] ${theme === 'dark' ? 'text-slate-100' : ''}`}>
       {loading && (
@@ -778,18 +916,47 @@ export function Dashboard({ responsaveis, locais, theme, activeWorkspaceId, acti
       )}
 
       {activeWorkspace && (
-        <section className={`grid gap-2 rounded-3xl border p-4 shadow-lg mb-8 backdrop-blur ${isDark ? 'border-[#2f2f2f] bg-[#212121]' : 'border-white/40 bg-white/70'}`}>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className={`font-heading text-lg ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>Workspace atual</h2>
-              <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>{activeWorkspace.name}</p>
-            </div>
+        <>
+          <section className={`grid gap-2 rounded-3xl mb-8 border p-4 shadow-lg mb-8 backdrop-blur ${isDark ? 'border-[#2f2f2f] bg-[#212121]' : 'border-white/40 bg-white/70'}`}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className={`font-heading text-lg ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>Workspace atual</h2>
+                <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>{activeWorkspace.name}</p>
+              </div>
 
-            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${activeWorkspace.kind === 'work' ? isDark ? 'bg-violet-500/15 text-violet-300' : 'bg-violet-100 text-violet-700' : isDark ? 'bg-emerald-500/15 text-emerald-300' : 'bg-emerald-100 text-emerald-700'}`}>
-              {workspaceKindLabel[activeWorkspace.kind]} • {tasks.length} tarefa(s)
-            </span>
-          </div>
-        </section>
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${activeWorkspace.kind === 'work' ? isDark ? 'bg-violet-500/15 text-violet-300' : 'bg-violet-100 text-violet-700' : isDark ? 'bg-emerald-500/15 text-emerald-300' : 'bg-emerald-100 text-emerald-700'}`}>
+                {workspaceKindLabel[activeWorkspace.kind]} • {tasks.length} tarefa(s)
+              </span>
+            </div>
+          </section>
+
+          {!loading && tasks.length === 0 && (
+            <section className={`mb-8 grid gap-3 rounded-3xl border border-dashed p-5 ${isDark ? 'border-sky-500/30 bg-sky-500/5' : 'border-sky-200 bg-sky-50'}`}>
+              <div>
+                <h3 className={`font-heading text-lg ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>Este workspace ainda está vazio</h3>
+                <p className={`mt-1 text-sm ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                  Crie a primeira tarefa para começar a visualizar indicadores, agenda e kanban deste workspace.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={openNewTaskDialog}
+                  className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-500"
+                >
+                  Criar primeira tarefa
+                </button>
+                <Link
+                  to="/configuracoes/tarefas/responsaveis"
+                  className={`rounded-xl border px-4 py-2 text-sm font-semibold ${isDark ? 'border-[#353535] text-slate-200 hover:bg-[#2a2a2a]' : 'border-slate-300 text-slate-700 hover:bg-white'}`}
+                >
+                  Cadastrar responsáveis
+                </Link>
+              </div>
+            </section>
+          )}
+        </>
       )}
 
       <section className={`grid gap-4 rounded-3xl border p-4 shadow-lg backdrop-blur ${isDark ? 'border-[#2f2f2f] bg-[#212121]' : 'border-white/40 bg-white/70'}`}>
@@ -839,30 +1006,6 @@ export function Dashboard({ responsaveis, locais, theme, activeWorkspaceId, acti
         )}
       </section>
 
-      {isFormOpen && (
-        <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm"
-          onClick={handleCloseDialog}
-        >
-          <div
-            className={`max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-3xl p-4 shadow-2xl ${isDark ? 'bg-[#181818]' : 'bg-white'}`}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <TaskForm
-              key={`${editingTask?.id ?? 'new-task'}-${activeWorkspaceId}`}
-              editingTask={editingTask}
-              workspaceId={activeWorkspaceId}
-              workspaceName={activeWorkspace?.name}
-              onSubmitTask={handleSubmitTask}
-              onCancelEdit={handleCloseDialog}
-              responsaveis={responsaveis}
-              locais={locais}
-              theme={theme}
-            />
-          </div>
-        </div>
-      )}
-
       {detailTask && (
         <div
           className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/45 p-4 backdrop-blur-sm sm:items-center"
@@ -893,6 +1036,14 @@ export function Dashboard({ responsaveis, locais, theme, activeWorkspaceId, acti
               <span className={getPrazoClass(detailTask.quando)}><strong>Quando:</strong> {formatDate(detailTask.quando)}</span>
               <span><strong>Status:</strong> {getStatusLabel(detailTask.status)}</span>
               <span><strong>Custo:</strong> {formatCurrency(detailTask.quantoCusta)}</span>
+              {detailTask.etiquetas.length > 0 && (
+                <div className="sm:col-span-2">
+                  <strong>Etiquetas:</strong>
+                  <div className="mt-2">
+                    <TaskTags tags={detailTask.etiquetas} isDark={isDark} />
+                  </div>
+                </div>
+              )}
             </div>
 
             <section className="mb-4 grid gap-3">
@@ -1269,220 +1420,382 @@ export function Dashboard({ responsaveis, locais, theme, activeWorkspaceId, acti
                 type="text"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Buscar por tarefa, motivo ou subtarefa..."
+                placeholder="Buscar por tarefa, etiqueta, motivo ou subtarefa..."
                 className={`rounded-xl border px-3 py-2 text-sm outline-none ring-cyan-300 transition focus:ring ${isDark ? 'border-[#353535] bg-[#181818] text-slate-100 placeholder:text-slate-500' : 'border-slate-300 bg-white text-slate-700'}`}
               />
             </div>
           </div>
-          <button
-            type="button"
-            onClick={openNewTaskDialog}
-            className="inline-flex items-center gap-2 rounded-xl bg-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-600"
-          >
-            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            Adicionar tarefa
-          </button>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className={`inline-flex rounded-xl border p-1 ${isDark ? 'border-[#353535] bg-[#181818]' : 'border-slate-300 bg-white'}`}>
+              <button
+                type="button"
+                onClick={() => setViewMode('table')}
+                className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${viewMode === 'table' ? 'bg-blue-600 text-white' : isDark ? 'text-slate-300 hover:bg-[#252525]' : 'text-slate-700 hover:bg-slate-100'}`}
+              >
+                Tabela
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('kanban')}
+                className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${viewMode === 'kanban' ? 'bg-blue-600 text-white' : isDark ? 'text-slate-300 hover:bg-[#252525]' : 'text-slate-700 hover:bg-slate-100'}`}
+              >
+                Kanban
+              </button>
+            </div>
+
+            {viewMode === 'kanban' && (
+              <label className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold ${isDark ? 'border-[#353535] bg-[#181818] text-slate-200' : 'border-slate-300 bg-white text-slate-700'}`}>
+                Cards por coluna
+                <select
+                  value={kanbanCardsPerColumn}
+                  onChange={(event) => setKanbanCardsPerColumn(Number(event.target.value))}
+                  className={`rounded-lg border px-2 py-1 text-sm outline-none ${isDark ? 'border-[#353535] bg-[#212121] text-slate-100' : 'border-slate-300 bg-white text-slate-700'}`}
+                >
+                  <option value={4}>4</option>
+                  <option value={6}>6</option>
+                  <option value={8}>8</option>
+                  <option value={10}>10</option>
+                  <option value={12}>12</option>
+                </select>
+              </label>
+            )}
+
+            <button
+              type="button"
+              onClick={openNewTaskDialog}
+              className="inline-flex items-center gap-2 rounded-xl bg-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-600"
+            >
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              Adicionar tarefa
+            </button>
+          </div>
         </div>
-        <div className={`overflow-x-auto rounded-2xl border hidden lg:block ${isDark ? 'border-[#353535]' : 'border-slate-200'}`}>
-          <table className={`min-w-full divide-y text-left ${isDark ? 'divide-[#2f2f2f] bg-[#181818]' : 'divide-slate-200 bg-white'}`}>
-            <thead className={`${isDark ? 'bg-[#212121] text-slate-300' : 'bg-slate-50 text-slate-600'} text-xs uppercase tracking-wide`}>
-              <tr>
-                <th className="px-5 py-3">
-                  <button type="button" onClick={() => handleSort('segment')} className="inline-flex items-center gap-1">
-                    Categoria <span>{getSortIndicator('segment')}</span>
-                  </button>
-                </th>
-                <th className="px-5 py-3">
-                  <button type="button" onClick={() => handleSort('oQue')} className="inline-flex items-center gap-1">
-                    O que <span>{getSortIndicator('oQue')}</span>
-                  </button>
-                </th>
-                <th className="px-5 py-3">
-                  <button type="button" onClick={() => handleSort('porQue')} className="inline-flex items-center gap-1">
-                    Por que <span>{getSortIndicator('porQue')}</span>
-                  </button>
-                </th>
-                <th className="px-5 py-3">
-                  <button type="button" onClick={() => handleSort('onde')} className="inline-flex items-center gap-1">
-                    Onde <span>{getSortIndicator('onde')}</span>
-                  </button>
-                </th>
-                <th className="px-5 py-3">
-                  <button type="button" onClick={() => handleSort('quem')} className="inline-flex items-center gap-1">
-                    Quem <span>{getSortIndicator('quem')}</span>
-                  </button>
-                </th>
-                <th className="px-5 py-3">
-                  <button type="button" onClick={() => handleSort('como')} className="inline-flex items-center gap-1">
-                    Como <span>{getSortIndicator('como')}</span>
-                  </button>
-                </th>
-                <th className="px-5 py-3">
-                  <button type="button" onClick={() => handleSort('priority')} className="inline-flex items-center gap-1">
-                    Prioridade <span>{getSortIndicator('priority')}</span>
-                  </button>
-                </th>
-                <th className="px-5 py-3">
-                  <button type="button" onClick={() => handleSort('dataInicio')} className="inline-flex items-center gap-1">
-                    Inicio <span>{getSortIndicator('dataInicio')}</span>
-                  </button>
-                </th>
-                <th className="px-5 py-3">
-                  <button type="button" onClick={() => handleSort('quando')} className="inline-flex items-center gap-1">
-                    Quando <span>{getSortIndicator('quando')}</span>
-                  </button>
-                </th>
-                <th className="px-5 py-3">
-                  <button type="button" onClick={() => handleSort('status')} className="inline-flex items-center gap-1">
-                    Status <span>{getSortIndicator('status')}</span>
-                  </button>
-                </th>
-                <th className="px-5 py-3">
-                  <button type="button" onClick={() => handleSort('progresso')} className="inline-flex items-center gap-1">
-                    Progresso <span>{getSortIndicator('progresso')}</span>
-                  </button>
-                </th>
-                <th className="px-5 py-3">Acoes</th>
-              </tr>
-            </thead>
-            <tbody className={`divide-y text-sm ${isDark ? 'divide-[#2f2f2f] text-slate-200' : 'divide-slate-100 text-slate-700'}`}>
+        {viewMode === 'table' ? (
+          <>
+            <div className={`overflow-x-auto rounded-2xl border hidden lg:block ${isDark ? 'border-[#353535]' : 'border-slate-200'}`}>
+              <table className={`min-w-full divide-y text-left ${isDark ? 'divide-[#2f2f2f] bg-[#181818]' : 'divide-slate-200 bg-white'}`}>
+                <thead className={`${isDark ? 'bg-[#212121] text-slate-300' : 'bg-slate-50 text-slate-600'} text-xs uppercase tracking-wide`}>
+                  <tr>
+                    <th className="px-5 py-3">
+                      <button type="button" onClick={() => handleSort('segment')} className="inline-flex items-center gap-1">
+                        Categoria <span>{getSortIndicator('segment')}</span>
+                      </button>
+                    </th>
+                    <th className="px-5 py-3">
+                      <button type="button" onClick={() => handleSort('oQue')} className="inline-flex items-center gap-1">
+                        O que <span>{getSortIndicator('oQue')}</span>
+                      </button>
+                    </th>
+                    <th className="px-5 py-3">
+                      <button type="button" onClick={() => handleSort('porQue')} className="inline-flex items-center gap-1">
+                        Por que <span>{getSortIndicator('porQue')}</span>
+                      </button>
+                    </th>
+                    <th className="px-5 py-3">
+                      <button type="button" onClick={() => handleSort('onde')} className="inline-flex items-center gap-1">
+                        Onde <span>{getSortIndicator('onde')}</span>
+                      </button>
+                    </th>
+                    <th className="px-5 py-3">
+                      <button type="button" onClick={() => handleSort('quem')} className="inline-flex items-center gap-1">
+                        Quem <span>{getSortIndicator('quem')}</span>
+                      </button>
+                    </th>
+                    <th className="px-5 py-3">
+                      <button type="button" onClick={() => handleSort('como')} className="inline-flex items-center gap-1">
+                        Como <span>{getSortIndicator('como')}</span>
+                      </button>
+                    </th>
+                    <th className="px-5 py-3">
+                      <button type="button" onClick={() => handleSort('priority')} className="inline-flex items-center gap-1">
+                        Prioridade <span>{getSortIndicator('priority')}</span>
+                      </button>
+                    </th>
+                    <th className="px-5 py-3">
+                      <button type="button" onClick={() => handleSort('dataInicio')} className="inline-flex items-center gap-1">
+                        Inicio <span>{getSortIndicator('dataInicio')}</span>
+                      </button>
+                    </th>
+                    <th className="px-5 py-3">
+                      <button type="button" onClick={() => handleSort('quando')} className="inline-flex items-center gap-1">
+                        Quando <span>{getSortIndicator('quando')}</span>
+                      </button>
+                    </th>
+                    <th className="px-5 py-3">
+                      <button type="button" onClick={() => handleSort('status')} className="inline-flex items-center gap-1">
+                        Status <span>{getSortIndicator('status')}</span>
+                      </button>
+                    </th>
+                    <th className="px-5 py-3">
+                      <button type="button" onClick={() => handleSort('progresso')} className="inline-flex items-center gap-1">
+                        Progresso <span>{getSortIndicator('progresso')}</span>
+                      </button>
+                    </th>
+                    <th className="px-5 py-3">Acoes</th>
+                  </tr>
+                </thead>
+                <tbody className={`divide-y text-sm ${isDark ? 'divide-[#2f2f2f] text-slate-200' : 'divide-slate-100 text-slate-700'}`}>
+                  {paginatedTrackingRows.length === 0 && (
+                    <tr>
+                      <td colSpan={12} className={`px-5 py-8 text-center ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                        Nenhuma tarefa para acompanhar.
+                      </td>
+                    </tr>
+                  )}
+
+                  {paginatedTrackingRows.map(({ task, segment }) => (
+                    <tr key={task.id} className={`align-top ${isDark ? 'hover:bg-[#212121]' : 'hover:bg-slate-50'}`}>
+                      <td className="px-5 py-4">
+                        <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold ${segmentBadge[segment]}`}>
+                          {segmentLabel[segment]}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="grid gap-2">
+                          <span className="font-semibold">{task.oQue}</span>
+                          <TaskTags tags={task.etiquetas} isDark={isDark} />
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">{task.porQue}</td>
+                      <td className="px-5 py-4">{task.onde}</td>
+                      <td className="px-5 py-4">{task.quem}</td>
+                      <td className="px-5 py-4">{task.como}</td>
+                      <td className="px-5 py-4">
+                        <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold ${priorityBadge[task.priority]}`}>
+                          {priorityLabel[task.priority]}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4">{formatDate(task.dataInicio)}</td>
+                      <td className={`px-5 py-4 ${getPrazoClass(task.quando)}`}>{formatDate(task.quando)}</td>
+                      <td className="px-5 py-4">
+                        <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold ${statusBadge[task.status]}`}>
+                          {statusLabel[task.status]}
+                        </span>
+                      </td>
+                      <td className="min-w-45 px-5 py-4">
+                        <TaskProgress task={task} isDark={isDark} compact />
+                      </td>
+                      <td className="px-5 py-4">
+                        {renderTaskActions(task)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="grid gap-3 lg:hidden">
               {paginatedTrackingRows.length === 0 && (
-                <tr>
-                  <td colSpan={12} className={`px-5 py-8 text-center ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                    Nenhuma tarefa para acompanhar.
-                  </td>
-                </tr>
+                <div className={`rounded-2xl border px-5 py-8 text-center text-sm ${isDark ? 'border-[#353535] bg-[#212121] text-slate-400' : 'border-slate-200 bg-white text-slate-500'}`}>
+                  Nenhuma tarefa para acompanhar.
+                </div>
               )}
 
               {paginatedTrackingRows.map(({ task, segment }) => (
-                <tr key={task.id} className={`align-top ${isDark ? 'hover:bg-[#212121]' : 'hover:bg-slate-50'}`}>
-                  <td className="px-5 py-4">
-                    <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold ${segmentBadge[segment]}`}>
-                      {segmentLabel[segment]}
-                    </span>
-                  </td>
-                  <td className="px-5 py-4 font-semibold">{task.oQue}</td>
-                  <td className="px-5 py-4">{task.porQue}</td>
-                  <td className="px-5 py-4">{task.onde}</td>
-                  <td className="px-5 py-4">{task.quem}</td>
-                  <td className="px-5 py-4">{task.como}</td>
-                  <td className="px-5 py-4">
-                    <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold ${priorityBadge[task.priority]}`}>
-                      {priorityLabel[task.priority]}
-                    </span>
-                  </td>
-                  <td className="px-5 py-4">{formatDate(task.dataInicio)}</td>
-                  <td className={`px-5 py-4 ${getPrazoClass(task.quando)}`}>{formatDate(task.quando)}</td>
-                  <td className="px-5 py-4">
+                <article key={task.id} className={`rounded-2xl border p-4 shadow-sm ${isDark ? 'border-[#353535] bg-[#212121]' : 'border-slate-200 bg-white'}`}>
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <span className={`text-sm font-semibold ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>{task.oQue}</span>
                     <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold ${statusBadge[task.status]}`}>
                       {statusLabel[task.status]}
                     </span>
-                  </td>
-                  <td className="min-w-45 px-5 py-4">
-                    <TaskProgress task={task} isDark={isDark} compact />
-                  </td>
-                  <td className="px-5 py-4">
-                    {renderTaskActions(task)}
-                  </td>
-                </tr>
+                  </div>
+
+                  <TaskTags tags={task.etiquetas} isDark={isDark} />
+
+                  <div className={`mt-3 grid gap-2 text-sm sm:grid-cols-2 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                    <p>
+                      <strong>Categoria:</strong>{' '}
+                      <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold ${segmentBadge[segment]}`}>
+                        {segmentLabel[segment]}
+                      </span>
+                    </p>
+                    <p className={getPrazoClass(task.quando)}><strong>Quando:</strong> {formatDate(task.quando)}</p>
+                    <p><strong>Quem:</strong> {task.quem || '-'}</p>
+                    <p><strong>Onde:</strong> {task.onde || '-'}</p>
+                    <p><strong>Inicio:</strong> {formatDate(task.dataInicio)}</p>
+                    <p><strong>Como:</strong> {task.como || '-'}</p>
+                    <p>
+                      <strong>Prioridade:</strong>{' '}
+                      <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold ${priorityBadge[task.priority]}`}>
+                        {priorityLabel[task.priority]}
+                      </span>
+                    </p>
+                  </div>
+
+                  <p className={`mt-3 text-sm ${isDark ? 'text-slate-300' : 'text-slate-600'}`}><strong>Por que:</strong> {task.porQue}</p>
+
+                  <div className="mt-3">
+                    <TaskProgress task={task} isDark={isDark} />
+                  </div>
+
+                  <div className="mt-4">{renderTaskActions(task)}</div>
+                </article>
               ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="grid gap-3 lg:hidden">
-          {paginatedTrackingRows.length === 0 && (
-            <div className={`rounded-2xl border px-5 py-8 text-center text-sm ${isDark ? 'border-[#353535] bg-[#212121] text-slate-400' : 'border-slate-200 bg-white text-slate-500'}`}>
-              Nenhuma tarefa para acompanhar.
             </div>
-          )}
 
-          {paginatedTrackingRows.map(({ task, segment }) => (
-            <article key={task.id} className={`rounded-2xl border p-4 shadow-sm ${isDark ? 'border-[#353535] bg-[#212121]' : 'border-slate-200 bg-white'}`}>
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <span className={`text-sm font-semibold ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>{task.oQue}</span>
-                <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold ${statusBadge[task.status]}`}>
-                  {statusLabel[task.status]}
+            {sortedTrackingRows.length > 0 && (
+              <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+                <label className={`flex items-center gap-2 text-sm ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                  Itens por pagina
+                  <select
+                    value={itemsPerPage}
+                    onChange={(event) => {
+                      setItemsPerPage(Number(event.target.value))
+                      setCurrentPage(1)
+                    }}
+                    className={`rounded-xl border px-2 py-1.5 text-sm font-semibold outline-none ring-cyan-300 transition focus:ring ${isDark ? 'border-[#353535] bg-[#181818] text-slate-200' : 'border-slate-300 bg-white text-slate-700'}`}
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={30}>30</option>
+                  </select>
+                </label>
+
+                <span className={`text-sm ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                  {sortedTrackingRows.length} tarefas listadas
                 </span>
+
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                  disabled={normalizedPage === 1}
+                  className={`rounded-xl border px-3 py-1.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${isDark ? 'border-[#353535] bg-[#181818] text-slate-200 hover:bg-[#2a2a2a]' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'}`}
+                >
+                  Anterior
+                </button>
+
+                <span className={`px-2 text-sm font-semibold ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                  Pagina {normalizedPage} de {totalPages}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                  disabled={normalizedPage === totalPages}
+                  className={`rounded-xl border px-3 py-1.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${isDark ? 'border-[#353535] bg-[#181818] text-slate-200 hover:bg-[#2a2a2a]' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'}`}
+                >
+                  Proxima
+                </button>
               </div>
+            )}
+          </>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
+            {(['pending', 'todo', 'doing', 'done'] as TaskStatus[]).map((status) => {
+              const rows = kanbanColumns[status]
+              const shouldEnableScroll = rows.length > kanbanCardsPerColumn
 
-              <div className={`grid gap-2 text-sm sm:grid-cols-2 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-                <p>
-                  <strong>Categoria:</strong>{' '}
-                  <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold ${segmentBadge[segment]}`}>
-                    {segmentLabel[segment]}
-                  </span>
-                </p>
-                <p className={getPrazoClass(task.quando)}><strong>Quando:</strong> {formatDate(task.quando)}</p>
-                <p><strong>Quem:</strong> {task.quem || '-'}</p>
-                <p><strong>Onde:</strong> {task.onde || '-'}</p>
-                <p><strong>Inicio:</strong> {formatDate(task.dataInicio)}</p>
-                <p><strong>Como:</strong> {task.como || '-'}</p>
-                <p>
-                  <strong>Prioridade:</strong>{' '}
-                  <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold ${priorityBadge[task.priority]}`}>
-                    {priorityLabel[task.priority]}
-                  </span>
-                </p>
-              </div>
+              return (
+                <section
+                  key={status}
+                  onDragOver={(event) => {
+                    event.preventDefault()
+                    setDragOverStatus(status)
+                  }}
+                  onDragLeave={() => {
+                    setDragOverStatus((current) => (current === status ? null : current))
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault()
+                    void handleKanbanDrop(status)
+                  }}
+                  className={`flex flex-col rounded-2xl border p-3 transition ${
+                    dragOverStatus === status
+                      ? isDark
+                        ? 'border-sky-500 bg-sky-500/10 ring-2 ring-sky-500/40'
+                        : 'border-sky-300 bg-sky-50 ring-2 ring-sky-200'
+                      : isDark
+                        ? 'border-[#353535] bg-[#181818]'
+                        : 'border-slate-200 bg-slate-50'
+                  }`}
+                >
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <div>
+                      <h3 className={`text-sm font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{statusLabel[status]}</h3>
+                      <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                        {rows.length} tarefa(s){shouldEnableScroll ? ` • scroll após ${kanbanCardsPerColumn}` : ''}
+                      </p>
+                    </div>
+                    <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold ${statusBadge[status]}`}>
+                      {rows.length}
+                    </span>
+                  </div>
 
-              <p className={`mt-3 text-sm ${isDark ? 'text-slate-300' : 'text-slate-600'}`}><strong>Por que:</strong> {task.porQue}</p>
+                  <div
+                    className={`grid gap-3 ${shouldEnableScroll ? 'overflow-y-auto pr-1' : ''}`}
+                    style={shouldEnableScroll ? { maxHeight: `${kanbanCardsPerColumn * 15}rem` } : undefined}
+                  >
+                    {rows.length === 0 && (
+                      <div className={`rounded-xl border border-dashed px-3 py-4 text-sm ${isDark ? 'border-[#3a3a3a] text-slate-400' : 'border-slate-300 text-slate-500'}`}>
+                        Sem tarefas nesta etapa.
+                      </div>
+                    )}
 
-              <div className="mt-3">
-                <TaskProgress task={task} isDark={isDark} />
-              </div>
+                    {rows.map(({ task, segment }) => (
+                      <article
+                        key={task.id}
+                        draggable
+                        onDragStart={(event) => {
+                          event.dataTransfer.effectAllowed = 'move'
+                          event.dataTransfer.setData('text/plain', task.id)
+                          setDraggedTaskId(task.id)
+                        }}
+                        onDragEnd={() => {
+                          setDraggedTaskId(null)
+                          setDragOverStatus(null)
+                        }}
+                        className={`rounded-2xl border p-4 shadow-sm transition ${
+                          draggedTaskId === task.id ? 'cursor-grabbing opacity-60' : 'cursor-grab'
+                        } ${isDark ? 'border-[#353535] bg-[#212121]' : 'border-slate-200 bg-white'}`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="grid gap-2">
+                            <h4 className={`text-sm font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{task.oQue}</h4>
+                            <TaskTags tags={task.etiquetas} isDark={isDark} />
+                          </div>
 
-              <div className="mt-4">{renderTaskActions(task)}</div>
-            </article>
-          ))}
-        </div>
+                          <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold ${priorityBadge[task.priority]}`}>
+                            {priorityLabel[task.priority]}
+                          </span>
+                        </div>
 
-        {sortedTrackingRows.length > 0 && (
-          <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
-            <label className={`flex items-center gap-2 text-sm ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-              Itens por pagina
-              <select
-                value={itemsPerPage}
-                onChange={(event) => {
-                  setItemsPerPage(Number(event.target.value))
-                  setCurrentPage(1)
-                }}
-                className={`rounded-xl border px-2 py-1.5 text-sm font-semibold outline-none ring-cyan-300 transition focus:ring ${isDark ? 'border-[#353535] bg-[#181818] text-slate-200' : 'border-slate-300 bg-white text-slate-700'}`}
-              >
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={30}>30</option>
-              </select>
-            </label>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold ${segmentBadge[segment]}`}>
+                            {segmentLabel[segment]}
+                          </span>
+                          <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold ${statusBadge[task.status]}`}>
+                            {statusLabel[task.status]}
+                          </span>
+                          <span className={`inline-flex rounded-md px-2.5 py-1 text-[11px] font-medium ${isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>
+                            Arraste para mover
+                          </span>
+                        </div>
 
-              <span className={`text-sm ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-                {sortedTrackingRows.length} tarefas listadas
-              </span>
+                        <p className={`mt-3 text-sm ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                          <strong>Por que:</strong> {task.porQue || 'Sem descrição complementar.'}
+                        </p>
 
-              <button
-                type="button"
-                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-                disabled={normalizedPage === 1}
-                className={`rounded-xl border px-3 py-1.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${isDark ? 'border-[#353535] bg-[#181818] text-slate-200 hover:bg-[#2a2a2a]' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'}`}
-              >
-                Anterior
-              </button>
+                        <div className={`mt-3 grid gap-1 text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                          <span><strong>Quem:</strong> {task.quem || '-'}</span>
+                          <span><strong>Onde:</strong> {task.onde || '-'}</span>
+                          <span className={getPrazoClass(task.quando)}><strong>Prazo:</strong> {formatDate(task.quando)}</span>
+                        </div>
 
-              <span className={`px-2 text-sm font-semibold ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-                Pagina {normalizedPage} de {totalPages}
-              </span>
+                        <div className="mt-3">
+                          <TaskProgress task={task} isDark={isDark} compact />
+                        </div>
 
-              <button
-                type="button"
-                onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-                disabled={normalizedPage === totalPages}
-                className={`rounded-xl border px-3 py-1.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${isDark ? 'border-[#353535] bg-[#181818] text-slate-200 hover:bg-[#2a2a2a]' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'}`}
-              >
-                Proxima
-              </button>
+                        <div className="mt-4">{renderTaskActions(task)}</div>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              )
+            })}
           </div>
         )}
       </section>
