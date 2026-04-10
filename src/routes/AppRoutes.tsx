@@ -2,10 +2,12 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { PublicOnly, RequireAuth } from '../middleware/AuthGuard'
 import { AppLayout } from '../layouts/AppLayout'
 import { DashboardReportPage } from '../pages/DashboardReport'
+import { AgendaPage } from '../pages/Agenda'
 import { HomePage } from '../pages/Home'
 import { LoginPage } from '../pages/Login'
 import { LocaisPage } from '../pages/Locais'
 import { ResponsaveisPage } from '../pages/Responsaveis'
+import { WorkspacesPage } from '../pages/Workspaces'
 
 type ThemeMode = 'light' | 'dark'
 
@@ -25,6 +27,8 @@ export function AppRoutes({ theme, onToggleTheme }: AppRoutesProps) {
         <Route path="/" element={<AppLayout theme={theme} onToggleTheme={onToggleTheme} />}>
           <Route index element={<HomePage />} />
           <Route path="dashboard" element={<DashboardReportPage />} />
+          <Route path="agenda" element={<AgendaPage />} />
+          <Route path="configuracoes/workspaces" element={<WorkspacesPage />} />
           <Route path="configuracoes/tarefas/responsaveis" element={<ResponsaveisPage />} />
           <Route path="configuracoes/tarefas/locais" element={<LocaisPage />} />
         </Route>

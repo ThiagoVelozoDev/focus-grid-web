@@ -49,9 +49,6 @@ export function useCatalog(type: CatalogType): UseCatalogResult {
 
   useEffect(() => {
     if (!catalogCollection) {
-      setEntries([])
-      setLoading(false)
-      setErrorMessage(null)
       return
     }
 
@@ -84,7 +81,7 @@ export function useCatalog(type: CatalogType): UseCatalogResult {
     )
 
     return unsubscribe
-  }, [catalogCollection])
+  }, [catalogCollection, type])
 
   const addItem = useCallback(
     async (name: string) => {

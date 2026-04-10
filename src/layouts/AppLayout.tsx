@@ -5,6 +5,8 @@ import { AppHeader } from '../components/Header'
 import { Sidebar } from '../components/Sidebar'
 import { useAuth } from '../hooks/useAuth'
 import { useCatalog } from '../hooks/useCatalog'
+import { useWorkspaces } from '../hooks/useWorkspaces'
+import type { Workspace, WorkspaceKind } from '../types/workspace'
 
 type ThemeMode = 'light' | 'dark'
 
@@ -21,6 +23,13 @@ export type LayoutOutletContext = {
   responsaveis: string[]
   locais: string[]
   theme: ThemeMode
+  workspaces: Workspace[]
+  activeWorkspaceId: string
+  activeWorkspace: Workspace | null
+  setActiveWorkspaceId: (workspaceId: string) => void
+  addWorkspace: (name: string, kind: WorkspaceKind) => Promise<void>
+  workspacesLoading: boolean
+  workspacesErrorMessage: string | null
   responsaveisCatalog: CatalogContext
   locaisCatalog: CatalogContext
 }
@@ -34,6 +43,7 @@ export function AppLayout({ theme, onToggleTheme }: AppLayoutProps) {
   const { user, signOutUser } = useAuth()
   const responsaveisHook = useCatalog('responsaveis')
   const locaisHook = useCatalog('locais')
+  const workspacesHook = useWorkspaces()
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -49,6 +59,13 @@ export function AppLayout({ theme, onToggleTheme }: AppLayoutProps) {
     responsaveis: responsaveisHook.items,
     locais: locaisHook.items,
     theme,
+    workspaces: workspacesHook.workspaces,
+    activeWorkspaceId: workspacesHook.activeWorkspaceId,
+    activeWorkspace: workspacesHook.activeWorkspace,
+    setActiveWorkspaceId: workspacesHook.setActiveWorkspaceId,
+    addWorkspace: workspacesHook.addWorkspace,
+    workspacesLoading: workspacesHook.loading,
+    workspacesErrorMessage: workspacesHook.errorMessage,
     responsaveisCatalog: {
       entries: responsaveisHook.entries,
       loading: responsaveisHook.loading,
@@ -76,10 +93,13 @@ export function AppLayout({ theme, onToggleTheme }: AppLayoutProps) {
         onClose={() => setSidebarOpen(false)}
       />
 
-      <div className={`min-w-0 transition-[margin] duration-200 ${sidebarCollapsed ? 'lg:ml-0' : 'lg:ml-[280px]'}`}>
+      <div className={`min-w-0 transition-[margin] duration-200 ${sidebarCollapsed ? 'lg:ml-0' : 'lg:ml-70'}`}>
         <AppHeader
           theme={theme}
           userEmail={user?.email}
+          workspaces={workspacesHook.workspaces}
+          activeWorkspaceId={workspacesHook.activeWorkspaceId}
+          onChangeWorkspace={workspacesHook.setActiveWorkspaceId}
           onOpenSidebar={() => setSidebarOpen(true)}
           isSidebarCollapsed={sidebarCollapsed}
           onToggleSidebarCollapse={() => setSidebarCollapsed((current) => !current)}

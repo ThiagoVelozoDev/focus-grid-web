@@ -75,6 +75,10 @@ service cloud.firestore {
     match /users/{userId}/locais/{itemId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
+
+    match /users/{userId}/workspaces/{itemId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
   }
 }
 ```

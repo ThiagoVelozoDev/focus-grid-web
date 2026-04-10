@@ -1,8 +1,11 @@
 import { type FormEvent, useState } from 'react'
-import type { Task, TaskInput } from '../types/task'
+import type { Task, TaskInput, TaskSubtask } from '../types/task'
+import { createEmptySubtask } from '../utils/subtask'
 
 type TaskFormProps = {
   editingTask: Task | null
+  workspaceId: string
+  workspaceName?: string
   onSubmitTask: (input: TaskInput) => void | Promise<void>
   onCancelEdit: () => void
   responsaveis: string[]
@@ -10,26 +13,27 @@ type TaskFormProps = {
   theme: 'light' | 'dark'
 }
 
-const initialTask: TaskInput = {
-  oQue: '',
-  porQue: '',
-  detalhamento: '',
-  onde: '',
-  dataInicio: '',
-  quando: '',
-  quem: '',
-  como: '',
-  quantoCusta: 0,
-  status: 'pending',
-  priority: 'medium',
-}
-
-const buildInitialForm = (editingTask: Task | null): TaskInput => {
+const buildInitialForm = (editingTask: Task | null, workspaceId: string): TaskInput => {
   if (!editingTask) {
-    return initialTask
+    return {
+      workspaceId,
+      oQue: '',
+      porQue: '',
+      detalhamento: '',
+      onde: '',
+      dataInicio: '',
+      quando: '',
+      quem: '',
+      como: '',
+      quantoCusta: 0,
+      status: 'pending',
+      priority: 'medium',
+      subtarefas: [],
+    }
   }
 
   return {
+    workspaceId: editingTask.workspaceId,
     oQue: editingTask.oQue,
     porQue: editingTask.porQue,
     detalhamento: editingTask.detalhamento,
@@ -41,11 +45,21 @@ const buildInitialForm = (editingTask: Task | null): TaskInput => {
     quantoCusta: editingTask.quantoCusta,
     status: editingTask.status,
     priority: editingTask.priority,
+    subtarefas: editingTask.subtarefas,
   }
 }
 
-export function TaskForm({ editingTask, onSubmitTask, onCancelEdit, responsaveis, locais, theme }: TaskFormProps) {
-  const [form, setForm] = useState<TaskInput>(() => buildInitialForm(editingTask))
+export function TaskForm({
+  editingTask,
+  workspaceId,
+  workspaceName,
+  onSubmitTask,
+  onCancelEdit,
+  responsaveis,
+  locais,
+  theme,
+}: TaskFormProps) {
+  const [form, setForm] = useState<TaskInput>(() => buildInitialForm(editingTask, workspaceId))
 
   const responsavelOptions = Array.from(new Set([...responsaveis, editingTask?.quem ?? ''].filter(Boolean)))
   const localOptions = Array.from(new Set([...locais, editingTask?.onde ?? ''].filter(Boolean)))
@@ -59,20 +73,62 @@ export function TaskForm({ editingTask, onSubmitTask, onCancelEdit, responsaveis
     setForm((current) => ({ ...current, [key]: value }))
   }
 
+  const handleSubtaskChange = (subtaskId: string, updater: (subtask: TaskSubtask) => TaskSubtask) => {
+    setForm((current) => ({
+      ...current,
+      subtarefas: current.subtarefas.map((item) => (item.id === subtaskId ? updater(item) : item)),
+    }))
+  }
+
+  const handleAddSubtask = () => {
+    setForm((current) => ({
+      ...current,
+      subtarefas: [...current.subtarefas, createEmptySubtask()],
+    }))
+  }
+
+  const handleRemoveSubtask = (subtaskId: string) => {
+    setForm((current) => ({
+      ...current,
+      subtarefas: current.subtarefas.filter((item) => item.id !== subtaskId),
+    }))
+  }
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    onSubmitTask(form)
+
+    const subtarefas = form.subtarefas
+      .map((item) => ({
+        ...item,
+        descricao: item.descricao.trim(),
+        porQue: item.porQue.trim(),
+        detalhamento: item.detalhamento.trim(),
+        como: item.como.trim(),
+      }))
+      .filter((item) => item.descricao.length > 0)
+
+    void onSubmitTask({
+      ...form,
+      workspaceId: form.workspaceId,
+      subtarefas,
+    })
 
     if (!editingTask) {
-      setForm(initialTask)
+      setForm(buildInitialForm(null, workspaceId))
     }
   }
 
   return (
     <form onSubmit={handleSubmit} className={`grid gap-5 rounded-3xl border p-6 shadow-lg ${isDark ? 'border-slate-700 bg-slate-950 text-slate-100' : 'border-white/60 bg-white/80'}`}>
-      <h2 className={`text-xl font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>
-        {editingTask ? 'Editar tarefa 5W2H' : 'Nova tarefa 5W2H'}
-      </h2>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <h2 className={`text-xl font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>
+          {editingTask ? 'Editar tarefa 5W2H' : 'Nova tarefa 5W2H'}
+        </h2>
+
+        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${isDark ? 'bg-cyan-500/15 text-cyan-300' : 'bg-sky-100 text-sky-700'}`}>
+          Workspace: {workspaceName ?? 'Atual'}
+        </span>
+      </div>
 
       <label className={`grid gap-2 text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
         O que sera feito?
@@ -171,6 +227,215 @@ export function TaskForm({ editingTask, onSubmitTask, onCancelEdit, responsaveis
           </select>
         </label>
       </div>
+
+      <section className={`grid gap-4 rounded-2xl border p-4 ${isDark ? 'border-slate-700 bg-slate-900/60' : 'border-slate-200 bg-slate-50'}`}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className={`text-sm font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>Checklist / subtarefas</h3>
+            <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+              Cada subtarefa pode ter os mesmos dados de planejamento da tarefa principal, incluindo inicio e prazo final.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleAddSubtask}
+            className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${isDark ? 'bg-cyan-500 text-slate-950 hover:bg-cyan-400' : 'bg-sky-600 text-white hover:bg-sky-500'}`}
+          >
+            Adicionar subtarefa
+          </button>
+        </div>
+
+        {form.subtarefas.length === 0 && (
+          <div className={`rounded-xl border border-dashed px-3 py-4 text-sm ${isDark ? 'border-slate-700 text-slate-400' : 'border-slate-300 text-slate-500'}`}>
+            Nenhuma subtarefa cadastrada ainda.
+          </div>
+        )}
+
+        <div className="grid gap-3">
+          {form.subtarefas.map((subtarefa, index) => (
+            <div key={subtarefa.id} className={`grid gap-3 rounded-2xl border p-4 ${isDark ? 'border-slate-700 bg-slate-950/60' : 'border-slate-200 bg-white'}`}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h4 className={`text-sm font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>Subtarefa {index + 1}</h4>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveSubtask(subtarefa.id)}
+                  className={`rounded-xl border px-3 py-2 text-sm font-semibold transition ${isDark ? 'border-slate-700 text-slate-200 hover:bg-slate-800' : 'border-slate-300 text-slate-700 hover:bg-slate-100'}`}
+                >
+                  Remover
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className={`grid gap-2 text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                  O que sera feito?
+                  <input
+                    value={subtarefa.descricao}
+                    onChange={(event) => {
+                      const updatedAt = new Date().toISOString()
+                      handleSubtaskChange(subtarefa.id, (current) => ({ ...current, descricao: event.target.value, updatedAt }))
+                    }}
+                    placeholder={`Subtarefa ${index + 1}`}
+                    className={fieldClass}
+                  />
+                </label>
+
+                <label className={`grid gap-2 text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                  Quem e responsavel?
+                  <select
+                    value={subtarefa.quem}
+                    onChange={(event) => {
+                      const updatedAt = new Date().toISOString()
+                      handleSubtaskChange(subtarefa.id, (current) => ({ ...current, quem: event.target.value, updatedAt }))
+                    }}
+                    className={fieldClass}
+                  >
+                    <option value="">Selecione...</option>
+                    {responsavelOptions.map((item) => (
+                      <option key={item} value={item}>{item}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className={`grid gap-2 text-sm font-medium sm:col-span-2 ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                  Por que isso deve ser feito?
+                  <textarea
+                    rows={2}
+                    value={subtarefa.porQue}
+                    onChange={(event) => {
+                      const updatedAt = new Date().toISOString()
+                      handleSubtaskChange(subtarefa.id, (current) => ({ ...current, porQue: event.target.value, updatedAt }))
+                    }}
+                    className={fieldClass}
+                  />
+                </label>
+
+                <label className={`grid gap-2 text-sm font-medium sm:col-span-2 ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                  Detalhamento
+                  <textarea
+                    rows={3}
+                    value={subtarefa.detalhamento}
+                    onChange={(event) => {
+                      const updatedAt = new Date().toISOString()
+                      handleSubtaskChange(subtarefa.id, (current) => ({ ...current, detalhamento: event.target.value, updatedAt }))
+                    }}
+                    className={fieldClass}
+                  />
+                </label>
+
+                <label className={`grid gap-2 text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                  Onde sera executado?
+                  <select
+                    value={subtarefa.onde}
+                    onChange={(event) => {
+                      const updatedAt = new Date().toISOString()
+                      handleSubtaskChange(subtarefa.id, (current) => ({ ...current, onde: event.target.value, updatedAt }))
+                    }}
+                    className={fieldClass}
+                  >
+                    <option value="">Selecione...</option>
+                    {localOptions.map((item) => (
+                      <option key={item} value={item}>{item}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className={`grid gap-2 text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                  Como sera feito?
+                  <input
+                    value={subtarefa.como}
+                    onChange={(event) => {
+                      const updatedAt = new Date().toISOString()
+                      handleSubtaskChange(subtarefa.id, (current) => ({ ...current, como: event.target.value, updatedAt }))
+                    }}
+                    className={fieldClass}
+                  />
+                </label>
+
+                <label className={`grid gap-2 text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                  Data inicio
+                  <input
+                    type="date"
+                    value={subtarefa.dataInicio}
+                    onChange={(event) => {
+                      const updatedAt = new Date().toISOString()
+                      handleSubtaskChange(subtarefa.id, (current) => ({ ...current, dataInicio: event.target.value, updatedAt }))
+                    }}
+                    className={fieldClass}
+                  />
+                </label>
+
+                <label className={`grid gap-2 text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                  Prazo final
+                  <input
+                    type="date"
+                    value={subtarefa.quando}
+                    onChange={(event) => {
+                      const updatedAt = new Date().toISOString()
+                      handleSubtaskChange(subtarefa.id, (current) => ({ ...current, quando: event.target.value, updatedAt }))
+                    }}
+                    className={fieldClass}
+                  />
+                </label>
+
+                <label className={`grid gap-2 text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                  Status
+                  <select
+                    value={subtarefa.status}
+                    onChange={(event) => {
+                      const updatedAt = new Date().toISOString()
+                      const nextStatus = event.target.value as TaskSubtask['status']
+                      handleSubtaskChange(subtarefa.id, (current) => ({
+                        ...current,
+                        status: nextStatus,
+                        updatedAt,
+                        completedAt: nextStatus === 'done' ? updatedAt : null,
+                      }))
+                    }}
+                    className={fieldClass}
+                  >
+                    <option value="pending">Pendente</option>
+                    <option value="todo">A fazer</option>
+                    <option value="doing">Em andamento</option>
+                    <option value="done">Concluida</option>
+                  </select>
+                </label>
+
+                <label className={`grid gap-2 text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                  Prioridade
+                  <select
+                    value={subtarefa.priority}
+                    onChange={(event) => {
+                      const updatedAt = new Date().toISOString()
+                      handleSubtaskChange(subtarefa.id, (current) => ({ ...current, priority: event.target.value as TaskSubtask['priority'], updatedAt }))
+                    }}
+                    className={fieldClass}
+                  >
+                    <option value="low">Baixa</option>
+                    <option value="medium">Media</option>
+                    <option value="high">Alta</option>
+                  </select>
+                </label>
+
+                <label className={`grid gap-2 text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                  Quanto vai custar?
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={subtarefa.quantoCusta}
+                    onChange={(event) => {
+                      const updatedAt = new Date().toISOString()
+                      handleSubtaskChange(subtarefa.id, (current) => ({ ...current, quantoCusta: Number(event.target.value), updatedAt }))
+                    }}
+                    className={fieldClass}
+                  />
+                </label>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <div className="mt-1 flex flex-wrap gap-2">
         <button type="submit" className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${isDark ? 'bg-cyan-500 text-slate-950 hover:bg-cyan-400' : 'bg-sky-600 text-white hover:bg-sky-500'}`}>

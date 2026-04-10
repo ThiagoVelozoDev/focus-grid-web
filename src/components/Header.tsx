@@ -1,8 +1,13 @@
+import type { Workspace } from '../types/workspace'
+
 type ThemeMode = 'light' | 'dark'
 
 type AppHeaderProps = {
   theme: ThemeMode
   userEmail: string | null | undefined
+  workspaces: Workspace[]
+  activeWorkspaceId: string
+  onChangeWorkspace: (workspaceId: string) => void
   onOpenSidebar: () => void
   isSidebarCollapsed: boolean
   onToggleSidebarCollapse: () => void
@@ -13,6 +18,9 @@ type AppHeaderProps = {
 export function AppHeader({
   theme,
   userEmail,
+  workspaces,
+  activeWorkspaceId,
+  onChangeWorkspace,
   onOpenSidebar,
   isSidebarCollapsed,
   onToggleSidebarCollapse,
@@ -56,6 +64,21 @@ export function AppHeader({
       </div>
 
       <div className="flex items-center gap-2">
+        <label className={`hidden items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold xl:flex ${isDark ? 'border-[#353535] text-slate-200' : 'border-slate-300 text-slate-600'}`}>
+          <span>Workspace</span>
+          <select
+            value={activeWorkspaceId}
+            onChange={(event) => onChangeWorkspace(event.target.value)}
+            className={`rounded-lg border px-2 py-1 text-xs outline-none ${isDark ? 'border-[#353535] bg-[#181818] text-slate-100' : 'border-slate-300 bg-white text-slate-700'}`}
+          >
+            {workspaces.map((workspace) => (
+              <option key={workspace.id} value={workspace.id}>
+                {workspace.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
         <span className={`hidden rounded-xl border px-3 py-2 text-xs font-semibold md:block ${isDark ? 'border-[#353535] text-slate-200' : 'border-slate-300 text-slate-600'}`}>
           Conta conectada: {userEmail ?? '-'}
         </span>

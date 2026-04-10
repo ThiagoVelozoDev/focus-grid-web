@@ -1,12 +1,15 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { TaskForm } from '../components/TaskForm'
 import { useTasks } from '../hooks/useTasks.ts'
-import type { TaskInput, Task, TaskStatus } from '../types/task'
+import type { TaskInput, Task, TaskStatus, TaskSubtask } from '../types/task'
+import type { Workspace, WorkspaceKind } from '../types/workspace'
+import { createEmptySubtask } from '../utils/subtask'
+import { getTaskProgressSummary } from '../utils/taskProgress'
 
 type Segment = 'dueToday' | 'dueTomorrow' | 'onTime' | 'late' | 'completed'
 type SortDirection = 'asc' | 'desc'
-type SortColumn = 'segment' | 'oQue' | 'porQue' | 'onde' | 'quem' | 'como' | 'priority' | 'dataInicio' | 'quando' | 'status'
+type SortColumn = 'segment' | 'oQue' | 'porQue' | 'onde' | 'quem' | 'como' | 'priority' | 'dataInicio' | 'quando' | 'status' | 'progresso'
 
 const isSameDate = (left: Date, right: Date) =>
   left.getFullYear() === right.getFullYear() &&
@@ -154,6 +157,46 @@ const priorityOrder = {
   high: 3,
 }
 
+const workspaceKindLabel: Record<WorkspaceKind, string> = {
+  work: 'Trabalho',
+  personal: 'Pessoal',
+}
+
+type TaskProgressProps = {
+  task: Task
+  isDark: boolean
+  compact?: boolean
+}
+
+function TaskProgress({ task, isDark, compact = false }: TaskProgressProps) {
+  const summary = getTaskProgressSummary(task)
+  const fillClass =
+    summary.percent === 100
+      ? 'bg-emerald-500'
+      : summary.percent >= 50
+        ? 'bg-sky-600'
+        : summary.percent > 0
+          ? 'bg-amber-500'
+          : 'bg-slate-400'
+
+  return (
+    <div className="grid gap-1.5">
+      <div className={`flex items-center justify-between gap-2 ${compact ? 'text-[11px]' : 'text-xs'} font-semibold ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+        <span>Progresso</span>
+        <span>{summary.percent}%</span>
+      </div>
+
+      <div className={`h-2.5 overflow-hidden rounded-full ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`}>
+        <div className={`h-full rounded-full transition-all ${fillClass}`} style={{ width: `${summary.percent}%` }} />
+      </div>
+
+      <span className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+        {summary.total === 0 ? 'Sem subtarefas' : `${summary.completed}/${summary.total} concluidas`}
+      </span>
+    </div>
+  )
+}
+
 type MultiSelectFilterProps = {
   label: string
   options: string[]
@@ -258,10 +301,12 @@ type DashboardProps = {
   responsaveis: string[]
   locais: string[]
   theme: 'light' | 'dark'
+  activeWorkspaceId: string
+  activeWorkspace: Workspace | null
 }
 
-export function Dashboard({ responsaveis, locais, theme }: DashboardProps) {
-  const { tasks, loading, addTask, updateTask, deleteTask, toggleComplete, addAcompanhamento, updateAcompanhamento } = useTasks()
+export function Dashboard({ responsaveis, locais, theme, activeWorkspaceId, activeWorkspace }: DashboardProps) {
+  const { tasks, loading, addTask, updateTask, deleteTask, toggleComplete, addSubtask, toggleSubtask, addAcompanhamento, updateAcompanhamento } = useTasks(activeWorkspaceId)
   const [statusFilter, setStatusFilter] = useState<string[]>([])
   const [responsavelFilter, setResponsavelFilter] = useState<string[]>([])
   const [localFilter, setLocalFilter] = useState<string[]>([])
@@ -273,6 +318,7 @@ export function Dashboard({ responsaveis, locais, theme }: DashboardProps) {
   const [showFilters, setShowFilters] = useState(true)
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null)
+  const [novaSubtarefa, setNovaSubtarefa] = useState<TaskSubtask>(() => createEmptySubtask())
   const [novoAcompanhamento, setNovoAcompanhamento] = useState('')
   const [editingAcompanhamentoId, setEditingAcompanhamentoId] = useState<string | null>(null)
   const [editingAcompanhamentoTexto, setEditingAcompanhamentoTexto] = useState('')
@@ -303,7 +349,12 @@ export function Dashboard({ responsaveis, locais, theme }: DashboardProps) {
     return tasks.filter((task) => {
       const matchesSearch =
         normalizedSearch.length === 0 ||
-        task.oQue.toLocaleLowerCase('pt-BR').includes(normalizedSearch)
+        [task.oQue, task.porQue, task.detalhamento, task.quem, task.onde, task.como]
+          .some((value) => value.toLocaleLowerCase('pt-BR').includes(normalizedSearch)) ||
+        task.subtarefas.some((item) =>
+          [item.descricao, item.porQue, item.detalhamento, item.quem, item.onde, item.como]
+            .some((value) => value.toLocaleLowerCase('pt-BR').includes(normalizedSearch)),
+        )
 
       const matchesStatus = statusFilter.length === 0 || statusFilter.includes(task.status)
       const matchesResponsavel = responsavelFilter.length === 0 || responsavelFilter.includes(task.quem)
@@ -437,6 +488,9 @@ export function Dashboard({ responsaveis, locais, theme }: DashboardProps) {
         case 'status':
           comparison = statusOrder[leftTask.status] - statusOrder[rightTask.status]
           break
+        case 'progresso':
+          comparison = getTaskProgressSummary(leftTask).percent - getTaskProgressSummary(rightTask).percent
+          break
         case 'priority':
           comparison = priorityOrder[leftTask.priority] - priorityOrder[rightTask.priority]
           break
@@ -465,15 +519,6 @@ export function Dashboard({ responsaveis, locais, theme }: DashboardProps) {
     return sortedTrackingRows.slice(start, start + itemsPerPage)
   }, [itemsPerPage, normalizedPage, sortedTrackingRows])
 
-  useEffect(() => {
-    setCurrentPage(1)
-  }, [searchTerm, statusFilter, categoryFilter, responsavelFilter, localFilter, priorityFilter])
-
-  useEffect(() => {
-    if (currentPage > totalPages) {
-      setCurrentPage(totalPages)
-    }
-  }, [currentPage, totalPages])
 
   const handleSort = (column: SortColumn) => {
     if (sortColumn === column) {
@@ -558,10 +603,19 @@ export function Dashboard({ responsaveis, locais, theme }: DashboardProps) {
 
   const openDetailDialog = (task: Task) => {
     setDetailTaskId(task.id)
+    setNovaSubtarefa(
+      createEmptySubtask({
+        quem: task.quem,
+        onde: task.onde,
+        dataInicio: task.dataInicio,
+        quando: task.quando,
+      }),
+    )
   }
 
   const closeDetailDialog = () => {
     setDetailTaskId(null)
+    setNovaSubtarefa(createEmptySubtask())
     setNovoAcompanhamento('')
     setEditingAcompanhamentoId(null)
     setEditingAcompanhamentoTexto('')
@@ -584,6 +638,46 @@ export function Dashboard({ responsaveis, locais, theme }: DashboardProps) {
       toast.error('Erro ao adicionar acompanhamento.')
     }
     setNovoAcompanhamento('')
+  }
+
+  const handleAddSubtarefa = async () => {
+    if (!detailTaskId) {
+      return
+    }
+
+    const subtarefa: TaskSubtask = {
+      ...novaSubtarefa,
+      descricao: novaSubtarefa.descricao.trim(),
+      porQue: novaSubtarefa.porQue.trim(),
+      detalhamento: novaSubtarefa.detalhamento.trim(),
+      como: novaSubtarefa.como.trim(),
+    }
+
+    if (!subtarefa.descricao) {
+      toast.info('Informe pelo menos o campo "O que" da subtarefa.')
+      return
+    }
+
+    try {
+      await addSubtask(detailTaskId, subtarefa)
+      toast.success('Subtarefa adicionada.')
+      setNovaSubtarefa(createEmptySubtask({ quem: detailTask?.quem ?? '', onde: detailTask?.onde ?? '' }))
+    } catch {
+      toast.error('Erro ao adicionar subtarefa.')
+    }
+  }
+
+  const handleToggleSubtarefa = async (subtaskId: string, isDone: boolean) => {
+    if (!detailTaskId) {
+      return
+    }
+
+    try {
+      await toggleSubtask(detailTaskId, subtaskId)
+      toast.success(isDone ? 'Subtarefa reaberta.' : 'Subtarefa concluida.')
+    } catch {
+      toast.error('Erro ao atualizar subtarefa.')
+    }
   }
 
   const startEditAcompanhamento = (id: string, texto: string) => {
@@ -683,6 +777,21 @@ export function Dashboard({ responsaveis, locais, theme }: DashboardProps) {
         </div>
       )}
 
+      {activeWorkspace && (
+        <section className={`grid gap-2 rounded-3xl border p-4 shadow-lg mb-8 backdrop-blur ${isDark ? 'border-[#2f2f2f] bg-[#212121]' : 'border-white/40 bg-white/70'}`}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className={`font-heading text-lg ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>Workspace atual</h2>
+              <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>{activeWorkspace.name}</p>
+            </div>
+
+            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${activeWorkspace.kind === 'work' ? isDark ? 'bg-violet-500/15 text-violet-300' : 'bg-violet-100 text-violet-700' : isDark ? 'bg-emerald-500/15 text-emerald-300' : 'bg-emerald-100 text-emerald-700'}`}>
+              {workspaceKindLabel[activeWorkspace.kind]} • {tasks.length} tarefa(s)
+            </span>
+          </div>
+        </section>
+      )}
+
       <section className={`grid gap-4 rounded-3xl border p-4 shadow-lg backdrop-blur ${isDark ? 'border-[#2f2f2f] bg-[#212121]' : 'border-white/40 bg-white/70'}`}>
         <div className="flex items-center justify-between">
           <h2 className={`font-heading text-lg ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>Painel do dashboard</h2>
@@ -740,8 +849,10 @@ export function Dashboard({ responsaveis, locais, theme }: DashboardProps) {
             onClick={(event) => event.stopPropagation()}
           >
             <TaskForm
-              key={editingTask?.id ?? 'new-task'}
+              key={`${editingTask?.id ?? 'new-task'}-${activeWorkspaceId}`}
               editingTask={editingTask}
+              workspaceId={activeWorkspaceId}
+              workspaceName={activeWorkspace?.name}
               onSubmitTask={handleSubmitTask}
               onCancelEdit={handleCloseDialog}
               responsaveis={responsaveis}
@@ -783,6 +894,218 @@ export function Dashboard({ responsaveis, locais, theme }: DashboardProps) {
               <span><strong>Status:</strong> {getStatusLabel(detailTask.status)}</span>
               <span><strong>Custo:</strong> {formatCurrency(detailTask.quantoCusta)}</span>
             </div>
+
+            <section className="mb-4 grid gap-3">
+              <div className={`rounded-2xl border p-4 ${isDark ? 'border-[#353535] bg-[#181818]' : 'border-slate-200 bg-slate-50'}`}>
+                <TaskProgress task={detailTask} isDark={isDark} />
+              </div>
+
+              <div className={`grid gap-3 rounded-2xl border p-4 ${isDark ? 'border-[#353535] bg-[#181818]' : 'border-slate-200 bg-slate-50'}`}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h4 className={`font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>Checklist</h4>
+                    <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                      {detailTask.subtarefas.length === 0
+                        ? 'Adicione subtarefas para acompanhar o progresso automaticamente.'
+                        : `${getTaskProgressSummary(detailTask).completed} de ${getTaskProgressSummary(detailTask).total} subtarefas concluidas`}
+                    </p>
+                  </div>
+
+                  {detailTask.subtarefas.length > 0 && (
+                    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${isDark ? 'bg-sky-500/15 text-sky-300' : 'bg-sky-100 text-sky-700'}`}>
+                      {getTaskProgressSummary(detailTask).percent}% concluido
+                    </span>
+                  )}
+                </div>
+
+                <div className={`grid gap-3 rounded-2xl border p-3 ${isDark ? 'border-[#353535] bg-[#212121]' : 'border-slate-200 bg-white'}`}>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <label className={`grid gap-2 text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                      O que sera feito?
+                      <input
+                        value={novaSubtarefa.descricao}
+                        onChange={(event) => setNovaSubtarefa((current) => ({ ...current, descricao: event.target.value }))}
+                        placeholder="Nova subtarefa"
+                        className={`rounded-xl border px-3 py-2 text-sm outline-none ring-cyan-300 transition focus:ring ${isDark ? 'border-[#353535] bg-[#181818] text-slate-100 placeholder:text-slate-500' : 'border-slate-200 bg-white text-slate-700'}`}
+                      />
+                    </label>
+
+                    <label className={`grid gap-2 text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                      Quem e responsavel?
+                      <select
+                        value={novaSubtarefa.quem}
+                        onChange={(event) => setNovaSubtarefa((current) => ({ ...current, quem: event.target.value }))}
+                        className={`rounded-xl border px-3 py-2 text-sm outline-none ring-cyan-300 transition focus:ring ${isDark ? 'border-[#353535] bg-[#181818] text-slate-100' : 'border-slate-200 bg-white text-slate-700'}`}
+                      >
+                        <option value="">Selecione...</option>
+                        {responsavelOptions.map((item) => (
+                          <option key={item} value={item}>{item}</option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className={`grid gap-2 text-sm font-medium sm:col-span-2 ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                      Por que isso deve ser feito?
+                      <textarea
+                        rows={2}
+                        value={novaSubtarefa.porQue}
+                        onChange={(event) => setNovaSubtarefa((current) => ({ ...current, porQue: event.target.value }))}
+                        className={`rounded-xl border px-3 py-2 text-sm outline-none ring-cyan-300 transition focus:ring ${isDark ? 'border-[#353535] bg-[#181818] text-slate-100' : 'border-slate-200 bg-white text-slate-700'}`}
+                      />
+                    </label>
+
+                    <label className={`grid gap-2 text-sm font-medium sm:col-span-2 ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                      Detalhamento
+                      <textarea
+                        rows={3}
+                        value={novaSubtarefa.detalhamento}
+                        onChange={(event) => setNovaSubtarefa((current) => ({ ...current, detalhamento: event.target.value }))}
+                        className={`rounded-xl border px-3 py-2 text-sm outline-none ring-cyan-300 transition focus:ring ${isDark ? 'border-[#353535] bg-[#181818] text-slate-100' : 'border-slate-200 bg-white text-slate-700'}`}
+                      />
+                    </label>
+
+                    <label className={`grid gap-2 text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                      Onde sera executado?
+                      <select
+                        value={novaSubtarefa.onde}
+                        onChange={(event) => setNovaSubtarefa((current) => ({ ...current, onde: event.target.value }))}
+                        className={`rounded-xl border px-3 py-2 text-sm outline-none ring-cyan-300 transition focus:ring ${isDark ? 'border-[#353535] bg-[#181818] text-slate-100' : 'border-slate-200 bg-white text-slate-700'}`}
+                      >
+                        <option value="">Selecione...</option>
+                        {localOptions.map((item) => (
+                          <option key={item} value={item}>{item}</option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className={`grid gap-2 text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                      Como sera feito?
+                      <input
+                        value={novaSubtarefa.como}
+                        onChange={(event) => setNovaSubtarefa((current) => ({ ...current, como: event.target.value }))}
+                        className={`rounded-xl border px-3 py-2 text-sm outline-none ring-cyan-300 transition focus:ring ${isDark ? 'border-[#353535] bg-[#181818] text-slate-100' : 'border-slate-200 bg-white text-slate-700'}`}
+                      />
+                    </label>
+
+                    <label className={`grid gap-2 text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                      Data inicio
+                      <input
+                        type="date"
+                        value={novaSubtarefa.dataInicio}
+                        onChange={(event) => setNovaSubtarefa((current) => ({ ...current, dataInicio: event.target.value }))}
+                        className={`rounded-xl border px-3 py-2 text-sm outline-none ring-cyan-300 transition focus:ring ${isDark ? 'border-[#353535] bg-[#181818] text-slate-100' : 'border-slate-200 bg-white text-slate-700'}`}
+                      />
+                    </label>
+
+                    <label className={`grid gap-2 text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                      Prazo final
+                      <input
+                        type="date"
+                        value={novaSubtarefa.quando}
+                        onChange={(event) => setNovaSubtarefa((current) => ({ ...current, quando: event.target.value }))}
+                        className={`rounded-xl border px-3 py-2 text-sm outline-none ring-cyan-300 transition focus:ring ${isDark ? 'border-[#353535] bg-[#181818] text-slate-100' : 'border-slate-200 bg-white text-slate-700'}`}
+                      />
+                    </label>
+
+                    <label className={`grid gap-2 text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                      Status
+                      <select
+                        value={novaSubtarefa.status}
+                        onChange={(event) => setNovaSubtarefa((current) => ({ ...current, status: event.target.value as TaskSubtask['status'] }))}
+                        className={`rounded-xl border px-3 py-2 text-sm outline-none ring-cyan-300 transition focus:ring ${isDark ? 'border-[#353535] bg-[#181818] text-slate-100' : 'border-slate-200 bg-white text-slate-700'}`}
+                      >
+                        <option value="pending">Pendente</option>
+                        <option value="todo">A fazer</option>
+                        <option value="doing">Em andamento</option>
+                        <option value="done">Concluida</option>
+                      </select>
+                    </label>
+
+                    <label className={`grid gap-2 text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                      Prioridade
+                      <select
+                        value={novaSubtarefa.priority}
+                        onChange={(event) => setNovaSubtarefa((current) => ({ ...current, priority: event.target.value as TaskSubtask['priority'] }))}
+                        className={`rounded-xl border px-3 py-2 text-sm outline-none ring-cyan-300 transition focus:ring ${isDark ? 'border-[#353535] bg-[#181818] text-slate-100' : 'border-slate-200 bg-white text-slate-700'}`}
+                      >
+                        <option value="low">Baixa</option>
+                        <option value="medium">Media</option>
+                        <option value="high">Alta</option>
+                      </select>
+                    </label>
+
+                    <label className={`grid gap-2 text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                      Quanto vai custar?
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={novaSubtarefa.quantoCusta}
+                        onChange={(event) => setNovaSubtarefa((current) => ({ ...current, quantoCusta: Number(event.target.value) }))}
+                        className={`rounded-xl border px-3 py-2 text-sm outline-none ring-cyan-300 transition focus:ring ${isDark ? 'border-[#353535] bg-[#181818] text-slate-100' : 'border-slate-200 bg-white text-slate-700'}`}
+                      />
+                    </label>
+                  </div>
+
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => void handleAddSubtarefa()}
+                      className="rounded-xl bg-sky-600 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-500"
+                    >
+                      Adicionar subtarefa
+                    </button>
+                  </div>
+                </div>
+
+                <ol className="grid gap-2">
+                  {detailTask.subtarefas.length === 0 && (
+                    <li className={`rounded-xl border border-dashed px-3 py-2 text-sm ${isDark ? 'border-[#353535] text-slate-400' : 'border-slate-300 text-slate-500'}`}>
+                      Nenhuma subtarefa cadastrada ainda.
+                    </li>
+                  )}
+
+                  {detailTask.subtarefas.map((item) => (
+                    <li key={item.id} className={`rounded-xl border px-3 py-3 ${isDark ? 'border-[#353535] bg-[#212121]' : 'border-slate-200 bg-white'}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <label className="flex flex-1 cursor-pointer items-start gap-3">
+                          <input
+                            type="checkbox"
+                            checked={item.status === 'done'}
+                            onChange={() => void handleToggleSubtarefa(item.id, item.status === 'done')}
+                            className="mt-1 h-4 w-4 rounded border-slate-300 text-cyan-500 focus:ring-cyan-300"
+                          />
+                          <div className="grid gap-1">
+                            <span className={`text-sm font-medium ${item.status === 'done' ? 'line-through opacity-70' : ''} ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>
+                              {item.descricao}
+                            </span>
+                            <div className={`flex flex-wrap gap-2 text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                              <span>{getStatusLabel(item.status)}</span>
+                              <span>Responsavel: {item.quem || '-'}</span>
+                              <span>Inicio: {formatDate(item.dataInicio)}</span>
+                              <span>Prazo: {formatDate(item.quando)}</span>
+                            </div>
+                          </div>
+                        </label>
+
+                        <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold ${priorityBadge[item.priority]}`}>
+                          {priorityLabel[item.priority]}
+                        </span>
+                      </div>
+
+                      {(item.porQue || item.detalhamento || item.como || item.onde || item.quantoCusta > 0) && (
+                        <div className={`mt-3 grid gap-1 text-xs ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                          {item.porQue && <p><strong>Por que:</strong> {item.porQue}</p>}
+                          {item.detalhamento && <p className="whitespace-pre-wrap"><strong>Detalhamento:</strong> {item.detalhamento}</p>}
+                          <p><strong>Onde:</strong> {item.onde || '-'} • <strong>Como:</strong> {item.como || '-'}</p>
+                          <p><strong>Custo:</strong> {formatCurrency(item.quantoCusta)}</p>
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </section>
 
             <p className={`whitespace-pre-wrap rounded-2xl border p-4 text-sm leading-relaxed ${isDark ? 'border-[#353535] bg-[#181818] text-slate-200' : 'border-slate-200 bg-white text-slate-700'}`}>
               {detailTask.detalhamento || 'Sem detalhamento informado.'}
@@ -941,12 +1264,12 @@ export function Dashboard({ responsaveis, locais, theme }: DashboardProps) {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="grid gap-2">
             <h2 className={`font-heading text-xl ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>Tarefas</h2>
-            <div className="w-full md:w-[360px]">
+            <div className="w-full md:w-90">
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Buscar em O que..."
+                placeholder="Buscar por tarefa, motivo ou subtarefa..."
                 className={`rounded-xl border px-3 py-2 text-sm outline-none ring-cyan-300 transition focus:ring ${isDark ? 'border-[#353535] bg-[#181818] text-slate-100 placeholder:text-slate-500' : 'border-slate-300 bg-white text-slate-700'}`}
               />
             </div>
@@ -1016,13 +1339,18 @@ export function Dashboard({ responsaveis, locais, theme }: DashboardProps) {
                     Status <span>{getSortIndicator('status')}</span>
                   </button>
                 </th>
+                <th className="px-5 py-3">
+                  <button type="button" onClick={() => handleSort('progresso')} className="inline-flex items-center gap-1">
+                    Progresso <span>{getSortIndicator('progresso')}</span>
+                  </button>
+                </th>
                 <th className="px-5 py-3">Acoes</th>
               </tr>
             </thead>
             <tbody className={`divide-y text-sm ${isDark ? 'divide-[#2f2f2f] text-slate-200' : 'divide-slate-100 text-slate-700'}`}>
               {paginatedTrackingRows.length === 0 && (
                 <tr>
-                  <td colSpan={11} className={`px-5 py-8 text-center ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                  <td colSpan={12} className={`px-5 py-8 text-center ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                     Nenhuma tarefa para acompanhar.
                   </td>
                 </tr>
@@ -1051,6 +1379,9 @@ export function Dashboard({ responsaveis, locais, theme }: DashboardProps) {
                     <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold ${statusBadge[task.status]}`}>
                       {statusLabel[task.status]}
                     </span>
+                  </td>
+                  <td className="min-w-45 px-5 py-4">
+                    <TaskProgress task={task} isDark={isDark} compact />
                   </td>
                   <td className="px-5 py-4">
                     {renderTaskActions(task)}
@@ -1098,6 +1429,10 @@ export function Dashboard({ responsaveis, locais, theme }: DashboardProps) {
               </div>
 
               <p className={`mt-3 text-sm ${isDark ? 'text-slate-300' : 'text-slate-600'}`}><strong>Por que:</strong> {task.porQue}</p>
+
+              <div className="mt-3">
+                <TaskProgress task={task} isDark={isDark} />
+              </div>
 
               <div className="mt-4">{renderTaskActions(task)}</div>
             </article>

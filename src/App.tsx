@@ -7,15 +7,13 @@ type ThemeMode = 'light' | 'dark'
 
 const THEME_STORAGE_KEY = 'focus-grid-theme'
 
-function App() {
-  const [theme, setTheme] = useState<ThemeMode>('light')
+const getInitialTheme = (): ThemeMode => {
+  const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY)
+  return savedTheme === 'dark' || savedTheme === 'light' ? savedTheme : 'light'
+}
 
-  useEffect(() => {
-    const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY)
-    if (savedTheme === 'dark' || savedTheme === 'light') {
-      setTheme(savedTheme)
-    }
-  }, [])
+function App() {
+  const [theme, setTheme] = useState<ThemeMode>(getInitialTheme)
 
   useEffect(() => {
     const root = document.documentElement
