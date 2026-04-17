@@ -95,6 +95,20 @@ export function Sidebar({ theme, isOpen, isCollapsed, onClose }: SidebarProps) {
                         Agenda
                     </NavLink>
 
+                    <NavLink
+                        to="/aplicativos"
+                        onClick={onClose}
+                        className={({ isActive }) => `flex items-center gap-2 rounded-xl px-3 py-2 text-left font-semibold transition-all duration-200 ${getNavClass(isActive, isDark)}`}
+                    >
+                        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                            <rect x="3" y="3" width="7" height="7" rx="1" />
+                            <rect x="14" y="3" width="7" height="7" rx="1" />
+                            <rect x="3" y="14" width="7" height="7" rx="1" />
+                            <rect x="14" y="14" width="7" height="7" rx="1" />
+                        </svg>
+                        Aplicativos
+                    </NavLink>
+
                     <button
                         type="button"
                         onClick={() => setShowConfigMenu((current) => !current)}

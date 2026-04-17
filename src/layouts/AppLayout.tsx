@@ -5,6 +5,7 @@ import { AppHeader } from '../components/Header'
 import { Sidebar } from '../components/Sidebar'
 import { useAuth } from '../hooks/useAuth'
 import { useCatalog, type CatalogItem } from '../hooks/useCatalog'
+import { useApps, type App, type AppFormData } from '../hooks/useApps'
 import { useWorkspaces } from '../hooks/useWorkspaces'
 import type { Workspace, WorkspaceKind } from '../types/workspace'
 
@@ -17,6 +18,15 @@ type CatalogContext = {
   addItem: (name: string) => Promise<void>
   updateItem: (id: string, name: string) => Promise<void>
   deleteItem: (id: string) => Promise<void>
+}
+
+type AppsContext = {
+  apps: App[]
+  loading: boolean
+  errorMessage: string | null
+  addApp: (data: AppFormData) => Promise<void>
+  updateApp: (id: string, data: AppFormData) => Promise<void>
+  deleteApp: (id: string) => Promise<void>
 }
 
 export type LayoutOutletContext = {
@@ -32,6 +42,7 @@ export type LayoutOutletContext = {
   workspacesErrorMessage: string | null
   responsaveisCatalog: CatalogContext
   locaisCatalog: CatalogContext
+  appsCatalog: AppsContext
 }
 
 type AppLayoutProps = {
@@ -44,6 +55,7 @@ export function AppLayout({ theme, onToggleTheme }: AppLayoutProps) {
   const workspacesHook = useWorkspaces()
   const responsaveisHook = useCatalog('responsaveis', workspacesHook.activeWorkspaceId)
   const locaisHook = useCatalog('locais', workspacesHook.activeWorkspaceId)
+  const appsHook = useApps()
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -81,6 +93,14 @@ export function AppLayout({ theme, onToggleTheme }: AppLayoutProps) {
       addItem: locaisHook.addItem,
       updateItem: locaisHook.updateItem,
       deleteItem: locaisHook.deleteItem,
+    },
+    appsCatalog: {
+      apps: appsHook.apps,
+      loading: appsHook.loading,
+      errorMessage: appsHook.errorMessage,
+      addApp: appsHook.addApp,
+      updateApp: appsHook.updateApp,
+      deleteApp: appsHook.deleteApp,
     },
   }
 
