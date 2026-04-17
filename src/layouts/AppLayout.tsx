@@ -55,7 +55,7 @@ export function AppLayout({ theme, onToggleTheme }: AppLayoutProps) {
   const workspacesHook = useWorkspaces()
   const responsaveisHook = useCatalog('responsaveis', workspacesHook.activeWorkspaceId)
   const locaisHook = useCatalog('locais', workspacesHook.activeWorkspaceId)
-  const appsHook = useApps()
+  const appsHook = useApps(workspacesHook.activeWorkspaceId)
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
