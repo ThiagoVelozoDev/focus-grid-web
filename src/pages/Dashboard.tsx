@@ -1468,109 +1468,131 @@ export function Dashboard({ responsaveis, locais, theme, activeWorkspaceId, acti
         {viewMode === 'table' ? (
           <>
             <div className={`overflow-x-auto rounded-2xl border hidden lg:block ${isDark ? 'border-[#353535]' : 'border-slate-200'}`}>
-              <table className={`min-w-full divide-y text-left ${isDark ? 'divide-[#2f2f2f] bg-[#181818]' : 'divide-slate-200 bg-white'}`}>
+              <table className={`w-full table-fixed divide-y text-left ${isDark ? 'divide-[#2f2f2f] bg-[#181818]' : 'divide-slate-200 bg-white'}`}>
+                <colgroup>
+                  <col className="w-24" />
+                  <col className="w-48" />
+                  <col className="w-36" />
+                  <col className="w-28" />
+                  <col className="w-28" />
+                  <col className="w-32" />
+                  <col className="w-22" />
+                  <col className="w-22" />
+                  <col className="w-22" />
+                  <col className="w-24" />
+                  <col className="w-32" />
+                  <col className="w-20" />
+                </colgroup>
                 <thead className={`${isDark ? 'bg-[#212121] text-slate-300' : 'bg-slate-50 text-slate-600'} text-xs uppercase tracking-wide`}>
                   <tr>
-                    <th className="px-5 py-3">
-                      <button type="button" onClick={() => handleSort('segment')} className="inline-flex items-center gap-1">
+                    <th className="px-3 py-2.5">
+                      <button type="button" onClick={() => handleSort('segment')} className="inline-flex items-center gap-1 whitespace-nowrap">
                         Categoria <span>{getSortIndicator('segment')}</span>
                       </button>
                     </th>
-                    <th className="px-5 py-3">
-                      <button type="button" onClick={() => handleSort('oQue')} className="inline-flex items-center gap-1">
+                    <th className="px-3 py-2.5">
+                      <button type="button" onClick={() => handleSort('oQue')} className="inline-flex items-center gap-1 whitespace-nowrap">
                         O que <span>{getSortIndicator('oQue')}</span>
                       </button>
                     </th>
-                    <th className="px-5 py-3">
-                      <button type="button" onClick={() => handleSort('porQue')} className="inline-flex items-center gap-1">
+                    <th className="px-3 py-2.5">
+                      <button type="button" onClick={() => handleSort('porQue')} className="inline-flex items-center gap-1 whitespace-nowrap">
                         Por que <span>{getSortIndicator('porQue')}</span>
                       </button>
                     </th>
-                    <th className="px-5 py-3">
-                      <button type="button" onClick={() => handleSort('onde')} className="inline-flex items-center gap-1">
+                    <th className="px-3 py-2.5">
+                      <button type="button" onClick={() => handleSort('onde')} className="inline-flex items-center gap-1 whitespace-nowrap">
                         Onde <span>{getSortIndicator('onde')}</span>
                       </button>
                     </th>
-                    <th className="px-5 py-3">
-                      <button type="button" onClick={() => handleSort('quem')} className="inline-flex items-center gap-1">
+                    <th className="px-3 py-2.5">
+                      <button type="button" onClick={() => handleSort('quem')} className="inline-flex items-center gap-1 whitespace-nowrap">
                         Quem <span>{getSortIndicator('quem')}</span>
                       </button>
                     </th>
-                    <th className="px-5 py-3">
-                      <button type="button" onClick={() => handleSort('como')} className="inline-flex items-center gap-1">
+                    <th className="px-3 py-2.5">
+                      <button type="button" onClick={() => handleSort('como')} className="inline-flex items-center gap-1 whitespace-nowrap">
                         Como <span>{getSortIndicator('como')}</span>
                       </button>
                     </th>
-                    <th className="px-5 py-3">
-                      <button type="button" onClick={() => handleSort('priority')} className="inline-flex items-center gap-1">
-                        Prioridade <span>{getSortIndicator('priority')}</span>
+                    <th className="px-3 py-2.5">
+                      <button type="button" onClick={() => handleSort('priority')} className="inline-flex items-center gap-1 whitespace-nowrap">
+                        Prior. <span>{getSortIndicator('priority')}</span>
                       </button>
                     </th>
-                    <th className="px-5 py-3">
-                      <button type="button" onClick={() => handleSort('dataInicio')} className="inline-flex items-center gap-1">
-                        Inicio <span>{getSortIndicator('dataInicio')}</span>
+                    <th className="px-3 py-2.5">
+                      <button type="button" onClick={() => handleSort('dataInicio')} className="inline-flex items-center gap-1 whitespace-nowrap">
+                        Início <span>{getSortIndicator('dataInicio')}</span>
                       </button>
                     </th>
-                    <th className="px-5 py-3">
-                      <button type="button" onClick={() => handleSort('quando')} className="inline-flex items-center gap-1">
-                        Quando <span>{getSortIndicator('quando')}</span>
+                    <th className="px-3 py-2.5">
+                      <button type="button" onClick={() => handleSort('quando')} className="inline-flex items-center gap-1 whitespace-nowrap">
+                        Prazo <span>{getSortIndicator('quando')}</span>
                       </button>
                     </th>
-                    <th className="px-5 py-3">
-                      <button type="button" onClick={() => handleSort('status')} className="inline-flex items-center gap-1">
+                    <th className="px-3 py-2.5">
+                      <button type="button" onClick={() => handleSort('status')} className="inline-flex items-center gap-1 whitespace-nowrap">
                         Status <span>{getSortIndicator('status')}</span>
                       </button>
                     </th>
-                    <th className="px-5 py-3">
-                      <button type="button" onClick={() => handleSort('progresso')} className="inline-flex items-center gap-1">
+                    <th className="px-3 py-2.5">
+                      <button type="button" onClick={() => handleSort('progresso')} className="inline-flex items-center gap-1 whitespace-nowrap">
                         Progresso <span>{getSortIndicator('progresso')}</span>
                       </button>
                     </th>
-                    <th className="px-5 py-3">Acoes</th>
+                    <th className="px-3 py-2.5 whitespace-nowrap">Ações</th>
                   </tr>
                 </thead>
-                <tbody className={`divide-y text-sm ${isDark ? 'divide-[#2f2f2f] text-slate-200' : 'divide-slate-100 text-slate-700'}`}>
+                <tbody className={`divide-y text-xs ${isDark ? 'divide-[#2f2f2f] text-slate-200' : 'divide-slate-100 text-slate-700'}`}>
                   {paginatedTrackingRows.length === 0 && (
                     <tr>
-                      <td colSpan={12} className={`px-5 py-8 text-center ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                      <td colSpan={12} className={`px-3 py-8 text-center ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                         Nenhuma tarefa para acompanhar.
                       </td>
                     </tr>
                   )}
 
                   {paginatedTrackingRows.map(({ task, segment }) => (
-                    <tr key={task.id} className={`align-top ${isDark ? 'hover:bg-[#212121]' : 'hover:bg-slate-50'}`}>
-                      <td className="px-5 py-4">
-                        <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold ${segmentBadge[segment]}`}>
+                    <tr key={task.id} className={`align-middle ${isDark ? 'hover:bg-[#212121]' : 'hover:bg-slate-50'}`}>
+                      <td className="px-3 py-2.5">
+                        <span className={`inline-flex rounded-md px-2 py-0.5 text-xs font-semibold ${segmentBadge[segment]}`}>
                           {segmentLabel[segment]}
                         </span>
                       </td>
-                      <td className="px-5 py-4">
-                        <div className="grid gap-2">
-                          <span className="font-semibold">{task.oQue}</span>
+                      <td className="px-3 py-2.5">
+                        <div className="grid gap-1">
+                          <span className="truncate font-semibold" title={task.oQue}>{task.oQue}</span>
                           <TaskTags tags={task.etiquetas} isDark={isDark} />
                         </div>
                       </td>
-                      <td className="px-5 py-4">{task.porQue}</td>
-                      <td className="px-5 py-4">{task.onde}</td>
-                      <td className="px-5 py-4">{task.quem}</td>
-                      <td className="px-5 py-4">{task.como}</td>
-                      <td className="px-5 py-4">
-                        <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold ${priorityBadge[task.priority]}`}>
+                      <td className="px-3 py-2.5">
+                        <span className="line-clamp-2" title={task.porQue}>{task.porQue}</span>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span className="truncate block" title={task.onde}>{task.onde}</span>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span className="truncate block" title={task.quem}>{task.quem}</span>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span className="line-clamp-2" title={task.como}>{task.como}</span>
+                      </td>
+                      <td className="px-3 py-2.5 whitespace-nowrap">
+                        <span className={`inline-flex rounded-md px-2 py-0.5 text-xs font-semibold ${priorityBadge[task.priority]}`}>
                           {priorityLabel[task.priority]}
                         </span>
                       </td>
-                      <td className="px-5 py-4">{formatDate(task.dataInicio)}</td>
-                      <td className={`px-5 py-4 ${getPrazoClass(task.quando)}`}>{formatDate(task.quando)}</td>
-                      <td className="px-5 py-4">
-                        <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold ${statusBadge[task.status]}`}>
+                      <td className="px-3 py-2.5 whitespace-nowrap">{formatDate(task.dataInicio)}</td>
+                      <td className={`px-3 py-2.5 whitespace-nowrap ${getPrazoClass(task.quando)}`}>{formatDate(task.quando)}</td>
+                      <td className="px-3 py-2.5 whitespace-nowrap">
+                        <span className={`inline-flex rounded-md px-2 py-0.5 text-xs font-semibold ${statusBadge[task.status]}`}>
                           {statusLabel[task.status]}
                         </span>
                       </td>
-                      <td className="min-w-45 px-5 py-4">
+                      <td className="px-3 py-2.5">
                         <TaskProgress task={task} isDark={isDark} compact />
                       </td>
-                      <td className="px-5 py-4">
+                      <td className="px-3 py-2.5">
                         {renderTaskActions(task)}
                       </td>
                     </tr>

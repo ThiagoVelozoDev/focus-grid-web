@@ -25,7 +25,7 @@ const getNavClass = (isActive: boolean, isDark: boolean) => {
 
 export function Sidebar({ theme, isOpen, isCollapsed, onClose }: SidebarProps) {
     const location = useLocation()
-    const [showConfigMenu, setShowConfigMenu] = useState(true)
+    const [showConfigMenu, setShowConfigMenu] = useState(false)
     const [showTasksMenu, setShowTasksMenu] = useState(true)
 
     const isDark = theme === 'dark'
@@ -196,6 +196,18 @@ export function Sidebar({ theme, isOpen, isCollapsed, onClose }: SidebarProps) {
                                             <circle cx="12" cy="10" r="2.5" />
                                         </svg>
                                         Cadastrar local
+                                    </NavLink>
+
+                                    <NavLink
+                                        to="/configuracoes/tarefas/etiquetas"
+                                        onClick={onClose}
+                                        className={({ isActive }) => `flex items-center gap-2 rounded-lg px-3 py-2 text-left font-semibold transition-all duration-200 ${getNavClass(isActive, isDark)}`}
+                                    >
+                                        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                                            <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82Z" />
+                                            <line x1="7" y1="7" x2="7.01" y2="7" />
+                                        </svg>
+                                        Etiquetas
                                     </NavLink>
                                 </div>
                             )}

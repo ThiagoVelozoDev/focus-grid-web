@@ -11,9 +11,10 @@ type TaskFormProps = {
   responsaveis: string[]
   locais: string[]
   theme: 'light' | 'dark'
+  initialEtiquetas?: string[]
 }
 
-const buildInitialForm = (editingTask: Task | null, workspaceId: string): TaskInput => {
+const buildInitialForm = (editingTask: Task | null, workspaceId: string, initialEtiquetas: string[] = []): TaskInput => {
   if (!editingTask) {
     return {
       workspaceId,
@@ -28,7 +29,7 @@ const buildInitialForm = (editingTask: Task | null, workspaceId: string): TaskIn
       quantoCusta: 0,
       status: 'pending',
       priority: 'medium',
-      etiquetas: [],
+      etiquetas: initialEtiquetas,
       subtarefas: [],
     }
   }
@@ -60,9 +61,12 @@ export function TaskForm({
   responsaveis,
   locais,
   theme,
+  initialEtiquetas = [],
 }: TaskFormProps) {
-  const [form, setForm] = useState<TaskInput>(() => buildInitialForm(editingTask, workspaceId))
-  const [tagsInput, setTagsInput] = useState(() => (editingTask?.etiquetas ?? []).join(', '))
+  const [form, setForm] = useState<TaskInput>(() => buildInitialForm(editingTask, workspaceId, initialEtiquetas))
+  const [tagsInput, setTagsInput] = useState(() =>
+    editingTask ? (editingTask.etiquetas ?? []).join(', ') : initialEtiquetas.join(', '),
+  )
   const [expandedSubtasks, setExpandedSubtasks] = useState<Record<string, boolean>>(() =>
     Object.fromEntries((editingTask?.subtarefas ?? []).map((item) => [item.id, false])),
   )

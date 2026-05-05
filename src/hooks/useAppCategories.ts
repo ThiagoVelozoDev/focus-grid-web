@@ -8,6 +8,7 @@ export type AppCategory = {
   id: string
   name: string
   workspaceId: string
+  order: number
   createdAt: string
   updatedAt: string
 }
@@ -18,6 +19,7 @@ type UseAppCategoriesResult = {
   addCategory: (name: string) => Promise<void>
   updateCategory: (id: string, name: string) => Promise<void>
   deleteCategory: (id: string) => Promise<void>
+  reorderCategories: (categoryIds: string[]) => Promise<void>
 }
 
 const getErrorMessage = (error: unknown) => {
@@ -53,35 +55,49 @@ export function useAppCategories(workspaceId: string): UseAppCategoriesResult {
     const unsubscribe = onSnapshot(
       query(col, orderBy('name', 'asc')),
       (snapshot) => {
-        const legacyDocs = snapshot.docs.filter((d) => {
+        const legacyWorkspaceDocs = snapshot.docs.filter((d) => {
           const data = d.data() as Partial<AppCategory>
           return typeof data.workspaceId !== 'string' || data.workspaceId.trim().length === 0
         })
+        const legacyOrderDocs = snapshot.docs.filter((d) => typeof d.data().order !== 'number')
 
-        if (legacyDocs.length > 0) {
+        if (legacyWorkspaceDocs.length > 0 || legacyOrderDocs.length > 0) {
           const batch = writeBatch(db)
-          for (const d of legacyDocs) {
-            batch.update(doc(col, d.id), { workspaceId, updatedAt: new Date().toISOString() })
+          const toUpdate = new Set([...legacyWorkspaceDocs.map((d) => d.id), ...legacyOrderDocs.map((d) => d.id)])
+          let idx = 0
+          for (const d of snapshot.docs) {
+            if (toUpdate.has(d.id)) {
+              const data = d.data() as Partial<AppCategory>
+              batch.update(doc(col, d.id), {
+                workspaceId: typeof data.workspaceId === 'string' && data.workspaceId.trim().length > 0 ? data.workspaceId : workspaceId,
+                order: typeof data.order === 'number' ? data.order : idx * 1000,
+                updatedAt: new Date().toISOString(),
+              })
+            }
+            idx++
           }
           void batch.commit()
         }
 
+        const normalized = snapshot.docs.map((d, index) => {
+          const data = d.data() as Partial<AppCategory>
+          return {
+            id: d.id,
+            name: typeof data.name === 'string' ? data.name.trim() : '',
+            workspaceId:
+              typeof data.workspaceId === 'string' && data.workspaceId.trim().length > 0
+                ? data.workspaceId
+                : workspaceId,
+            order: typeof data.order === 'number' ? data.order : index * 1000,
+            createdAt: typeof data.createdAt === 'string' ? data.createdAt : new Date().toISOString(),
+            updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : new Date().toISOString(),
+          }
+        })
+
         setCategories(
-          snapshot.docs
-            .map((d) => {
-              const data = d.data() as Partial<AppCategory>
-              return {
-                id: d.id,
-                name: typeof data.name === 'string' ? data.name.trim() : '',
-                workspaceId:
-                  typeof data.workspaceId === 'string' && data.workspaceId.trim().length > 0
-                    ? data.workspaceId
-                    : workspaceId,
-                createdAt: typeof data.createdAt === 'string' ? data.createdAt : new Date().toISOString(),
-                updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : new Date().toISOString(),
-              }
-            })
-            .filter((cat) => cat.workspaceId === workspaceId),
+          normalized
+            .filter((cat) => cat.workspaceId === workspaceId)
+            .sort((a, b) => a.order - b.order),
         )
         setLoading(false)
       },
@@ -96,7 +112,7 @@ export function useAppCategories(workspaceId: string): UseAppCategoriesResult {
       if (!col || !workspaceId) return
       const now = new Date().toISOString()
       try {
-        await addDoc(col, { name: name.trim(), workspaceId, createdAt: now, updatedAt: now })
+        await addDoc(col, { name: name.trim(), workspaceId, order: Date.now(), createdAt: now, updatedAt: now })
       } catch (error) {
         throw new Error(getErrorMessage(error))
       }
@@ -128,5 +144,17 @@ export function useAppCategories(workspaceId: string): UseAppCategoriesResult {
     [col],
   )
 
-  return { categories, loading, addCategory, updateCategory, deleteCategory }
+  const reorderCategories = useCallback(
+    async (categoryIds: string[]) => {
+      if (!col) return
+      const batch = writeBatch(db)
+      categoryIds.forEach((id, index) => {
+        batch.update(doc(col, id), { order: index * 1000, updatedAt: new Date().toISOString() })
+      })
+      await batch.commit()
+    },
+    [col],
+  )
+
+  return { categories, loading, addCategory, updateCategory, deleteCategory, reorderCategories }
 }

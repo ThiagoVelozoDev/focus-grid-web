@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import { toast } from 'sonner'
 import { AppHeader } from '../components/Header'
@@ -6,6 +6,7 @@ import { Sidebar } from '../components/Sidebar'
 import { useAuth } from '../hooks/useAuth'
 import { useCatalog, type CatalogItem } from '../hooks/useCatalog'
 import { useApps, type App, type AppFormData } from '../hooks/useApps'
+import { useLabels, type Label } from '../hooks/useLabels'
 import { useWorkspaces } from '../hooks/useWorkspaces'
 import type { Workspace, WorkspaceKind } from '../types/workspace'
 
@@ -27,6 +28,16 @@ type AppsContext = {
   addApp: (data: AppFormData) => Promise<void>
   updateApp: (id: string, data: AppFormData) => Promise<void>
   deleteApp: (id: string) => Promise<void>
+  reorderApps: (appIds: string[]) => Promise<void>
+}
+
+type LabelsContext = {
+  labels: Label[]
+  loading: boolean
+  errorMessage: string | null
+  addLabel: (name: string) => Promise<void>
+  updateLabel: (id: string, name: string) => Promise<void>
+  deleteLabel: (id: string) => Promise<void>
 }
 
 export type LayoutOutletContext = {
@@ -43,6 +54,7 @@ export type LayoutOutletContext = {
   responsaveisCatalog: CatalogContext
   locaisCatalog: CatalogContext
   appsCatalog: AppsContext
+  labelsCatalog: LabelsContext
 }
 
 type AppLayoutProps = {
@@ -56,11 +68,44 @@ export function AppLayout({ theme, onToggleTheme }: AppLayoutProps) {
   const responsaveisHook = useCatalog('responsaveis', workspacesHook.activeWorkspaceId)
   const locaisHook = useCatalog('locais', workspacesHook.activeWorkspaceId)
   const appsHook = useApps(workspacesHook.activeWorkspaceId)
+  const labelsHook = useLabels(workspacesHook.activeWorkspaceId)
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   const isDark = theme === 'dark'
+
+  // Ref para ler labels sem incluí-las na dep array (evita loop infinito no sync)
+  const labelsRef = useRef(labelsHook.labels)
+  labelsRef.current = labelsHook.labels
+
+  // Sync automático: cria/atualiza/remove etiquetas conforme os apps cadastrados
+  useEffect(() => {
+    if (appsHook.loading || labelsHook.loading) return
+
+    const apps = appsHook.apps
+    const labels = labelsRef.current
+
+    const run = async () => {
+      for (const app of apps) {
+        const existing = labels.find((l) => l.sourceAppId === app.id)
+        if (!existing) {
+          await labelsHook.addAppLabel(app.id, app.name)
+        } else if (existing.name !== app.name) {
+          await labelsHook.updateLabel(existing.id, app.name)
+        }
+      }
+      for (const label of labels) {
+        if (label.sourceAppId && !apps.find((a) => a.id === label.sourceAppId)) {
+          await labelsHook.deleteLabel(label.id)
+        }
+      }
+    }
+
+    void run()
+    // Reage apenas a mudanças nos apps; lê labels via ref para não criar loop
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appsHook.apps, appsHook.loading, labelsHook.loading])
 
   const handleSignOut = async () => {
     await signOutUser()
@@ -101,6 +146,15 @@ export function AppLayout({ theme, onToggleTheme }: AppLayoutProps) {
       addApp: appsHook.addApp,
       updateApp: appsHook.updateApp,
       deleteApp: appsHook.deleteApp,
+      reorderApps: appsHook.reorderApps,
+    },
+    labelsCatalog: {
+      labels: labelsHook.labels,
+      loading: labelsHook.loading,
+      errorMessage: labelsHook.errorMessage,
+      addLabel: labelsHook.addLabel,
+      updateLabel: labelsHook.updateLabel,
+      deleteLabel: labelsHook.deleteLabel,
     },
   }
 

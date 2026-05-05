@@ -12,11 +12,12 @@ export type App = {
   description: string
   categoryId: string
   workspaceId: string
+  order: number
   createdAt: string
   updatedAt: string
 }
 
-export type AppFormData = Omit<App, 'id' | 'createdAt' | 'updatedAt' | 'workspaceId'>
+export type AppFormData = Omit<App, 'id' | 'createdAt' | 'updatedAt' | 'workspaceId' | 'order'>
 
 type UseAppsResult = {
   apps: App[]
@@ -25,6 +26,7 @@ type UseAppsResult = {
   addApp: (data: AppFormData) => Promise<void>
   updateApp: (id: string, data: AppFormData) => Promise<void>
   deleteApp: (id: string) => Promise<void>
+  reorderApps: (appIds: string[]) => Promise<void>
 }
 
 const getErrorMessage = (error: unknown) => {
@@ -63,40 +65,54 @@ export function useApps(workspaceId: string): UseAppsResult {
     const unsubscribe = onSnapshot(
       query(appsCollection, orderBy('name', 'asc')),
       (snapshot) => {
-        const legacyDocs = snapshot.docs.filter((d) => {
+        const legacyWorkspaceDocs = snapshot.docs.filter((d) => {
           const data = d.data() as Partial<App>
           return typeof data.workspaceId !== 'string' || data.workspaceId.trim().length === 0
         })
+        const legacyOrderDocs = snapshot.docs.filter((d) => typeof d.data().order !== 'number')
 
-        if (legacyDocs.length > 0) {
+        if (legacyWorkspaceDocs.length > 0 || legacyOrderDocs.length > 0) {
           const batch = writeBatch(db)
-          for (const d of legacyDocs) {
-            batch.update(doc(appsCollection, d.id), { workspaceId, updatedAt: new Date().toISOString() })
+          const toUpdate = new Set([...legacyWorkspaceDocs.map((d) => d.id), ...legacyOrderDocs.map((d) => d.id)])
+          let idx = 0
+          for (const d of snapshot.docs) {
+            if (toUpdate.has(d.id)) {
+              const data = d.data() as Partial<App>
+              batch.update(doc(appsCollection, d.id), {
+                workspaceId: typeof data.workspaceId === 'string' && data.workspaceId.trim().length > 0 ? data.workspaceId : workspaceId,
+                order: typeof data.order === 'number' ? data.order : idx * 1000,
+                updatedAt: new Date().toISOString(),
+              })
+            }
+            idx++
           }
           void batch.commit()
         }
 
-        const nextApps = snapshot.docs
-          .map((docSnap) => {
-            const data = docSnap.data() as Partial<App>
-            return {
-              id: docSnap.id,
-              name: typeof data.name === 'string' ? data.name.trim() : '',
-              url: typeof data.url === 'string' ? data.url.trim() : '',
-              photo: typeof data.photo === 'string' ? data.photo.trim() : '',
-              description: typeof data.description === 'string' ? data.description.trim() : '',
-              categoryId: typeof data.categoryId === 'string' ? data.categoryId : '',
-              workspaceId:
-                typeof data.workspaceId === 'string' && data.workspaceId.trim().length > 0
-                  ? data.workspaceId
-                  : workspaceId,
-              createdAt: typeof data.createdAt === 'string' ? data.createdAt : new Date().toISOString(),
-              updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : new Date().toISOString(),
-            }
-          })
-          .filter((app) => app.workspaceId === workspaceId)
+        const normalized = snapshot.docs.map((docSnap, index) => {
+          const data = docSnap.data() as Partial<App>
+          return {
+            id: docSnap.id,
+            name: typeof data.name === 'string' ? data.name.trim() : '',
+            url: typeof data.url === 'string' ? data.url.trim() : '',
+            photo: typeof data.photo === 'string' ? data.photo.trim() : '',
+            description: typeof data.description === 'string' ? data.description.trim() : '',
+            categoryId: typeof data.categoryId === 'string' ? data.categoryId : '',
+            workspaceId:
+              typeof data.workspaceId === 'string' && data.workspaceId.trim().length > 0
+                ? data.workspaceId
+                : workspaceId,
+            order: typeof data.order === 'number' ? data.order : index * 1000,
+            createdAt: typeof data.createdAt === 'string' ? data.createdAt : new Date().toISOString(),
+            updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : new Date().toISOString(),
+          }
+        })
 
-        setApps(nextApps)
+        const filtered = normalized
+          .filter((app) => app.workspaceId === workspaceId)
+          .sort((a, b) => a.order - b.order)
+
+        setApps(filtered)
         setErrorMessage(null)
         setLoading(false)
       },
@@ -115,7 +131,7 @@ export function useApps(workspaceId: string): UseAppsResult {
       if (!appsCollection || !workspaceId) return
       const now = new Date().toISOString()
       try {
-        await addDoc(appsCollection, { ...data, workspaceId, createdAt: now, updatedAt: now })
+        await addDoc(appsCollection, { ...data, workspaceId, order: Date.now(), createdAt: now, updatedAt: now })
       } catch (error) {
         throw new Error(getErrorMessage(error))
       }
@@ -147,5 +163,17 @@ export function useApps(workspaceId: string): UseAppsResult {
     [appsCollection],
   )
 
-  return { apps, loading, errorMessage, addApp, updateApp, deleteApp }
+  const reorderApps = useCallback(
+    async (appIds: string[]) => {
+      if (!appsCollection) return
+      const batch = writeBatch(db)
+      appIds.forEach((id, index) => {
+        batch.update(doc(appsCollection, id), { order: index * 1000, updatedAt: new Date().toISOString() })
+      })
+      await batch.commit()
+    },
+    [appsCollection],
+  )
+
+  return { apps, loading, errorMessage, addApp, updateApp, deleteApp, reorderApps }
 }

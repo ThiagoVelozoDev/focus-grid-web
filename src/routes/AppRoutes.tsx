@@ -11,6 +11,8 @@ import { WorkspacesPage } from '../pages/Workspaces'
 import { TaskEditorPage } from '../pages/TaskEditor'
 import { TaskDetailsPage } from '../pages/TaskDetails'
 import { AplicativosPage } from '../pages/Aplicativos'
+import { AplicativoTarefasPage } from '../pages/AplicativoTarefas'
+import { EtiquetasPage } from '../pages/Etiquetas'
 
 type ThemeMode = 'light' | 'dark'
 
@@ -37,7 +39,9 @@ export function AppRoutes({ theme, onToggleTheme }: AppRoutesProps) {
           <Route path="configuracoes/workspaces" element={<WorkspacesPage />} />
           <Route path="configuracoes/tarefas/responsaveis" element={<ResponsaveisPage />} />
           <Route path="configuracoes/tarefas/locais" element={<LocaisPage />} />
+          <Route path="configuracoes/tarefas/etiquetas" element={<EtiquetasPage />} />
           <Route path="aplicativos" element={<AplicativosPage />} />
+          <Route path="aplicativos/:appId/tarefas" element={<AplicativoTarefasPage />} />
         </Route>
       </Route>
 

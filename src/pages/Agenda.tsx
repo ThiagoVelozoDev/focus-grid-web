@@ -118,9 +118,9 @@ export function AgendaPage() {
   const { tasks, loading } = useTasks(activeWorkspaceId)
   const isDark = theme === 'dark'
 
-  const [viewMode, setViewMode] = useState<ViewMode>('month')
+  const [viewMode, setViewMode] = useState<ViewMode>('week')
   const [cursorDate, setCursorDate] = useState(new Date())
-  const [statusFilter, setStatusFilter] = useState<TaskStatus[]>([])
+  const [statusFilter, setStatusFilter] = useState<TaskStatus[]>(['pending', 'todo', 'doing'])
   const [selectedEvent, setSelectedEvent] = useState<AgendaEvent | null>(null)
 
   const filteredTasks = useMemo(

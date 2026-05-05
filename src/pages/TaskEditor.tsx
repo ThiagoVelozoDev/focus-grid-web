@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Link, useNavigate, useOutletContext, useParams } from 'react-router-dom'
+import { Link, useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { TaskForm } from '../components/TaskForm'
 import { useTasks } from '../hooks/useTasks'
@@ -9,10 +9,16 @@ import type { TaskInput } from '../types/task'
 export function TaskEditorPage() {
   const navigate = useNavigate()
   const { taskId } = useParams<{ taskId?: string }>()
+  const [searchParams] = useSearchParams()
   const { responsaveis, locais, theme, activeWorkspaceId, activeWorkspace } = useOutletContext<LayoutOutletContext>()
   const { tasks, loading, addTask, updateTask } = useTasks(activeWorkspaceId)
   const isDark = theme === 'dark'
   const isEditing = Boolean(taskId)
+
+  const initialEtiquetas = useMemo(() => {
+    const etiqueta = searchParams.get('etiqueta')
+    return etiqueta ? [etiqueta] : []
+  }, [searchParams])
 
   const editingTask = useMemo(
     () => (taskId ? tasks.find((task) => task.id === taskId) ?? null : null),
@@ -152,6 +158,7 @@ export function TaskEditorPage() {
         responsaveis={responsaveis}
         locais={locais}
         theme={theme}
+        initialEtiquetas={initialEtiquetas}
       />
     </main>
   )
